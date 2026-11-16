@@ -8,6 +8,10 @@ a version (see [AGENTS.md](AGENTS.md#releases)).
 
 ## [Unreleased]
 
+### Added
+
+- **spaces-plus, sysstat:** CPU and memory on macOS machines too, this computer included. Memory in use matches Activity Monitor's Memory Used.
+
 ### Changed
 
 - **agents-ids, sysstat:** an agent or stats bar on another machine shows that machine's Spaces icon instead of its name, so an agent's title isn't cut short; hover the agent's icon (or open the stats card) for the name.

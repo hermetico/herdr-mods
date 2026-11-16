@@ -51,7 +51,8 @@ none; ports from 32768 up (private, ephemeral sockets) and the agents' own (`cla
 `gh pr list --state all --json number,headRefName,state,isDraft,url,statusCheckRollup` per repo, at most
 every 5 minutes, only for repos with a space on a branch other than `main`/`master`, after the ports (a
 slow `gh` never holds up the port chips). Machine load reads `/proc/stat` and
-`/proc/meminfo` every 4 s. With the window in the background: ports once a minute, load every 30 s. With the sidebar narrowed to
+`/proc/meminfo` every 4 s; a machine without `/proc/stat`, such as macOS, runs the constant
+`MAC_LOAD_SCRIPT` (`sysctl`, summed `ps -A -o %cpu=`, `vm_stat`) instead, parsed by `macLoad` in `extras.mjs`. With the window in the background: ports once a minute, load every 30 s. With the sidebar narrowed to
 a rail nothing is polled: the rail shows none of it.
 
 **Built from:** a copy of the shipped `spaces` mod (herdr-app 0.1.12). Its own helpers are in

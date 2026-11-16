@@ -28,7 +28,14 @@ sparkline over. Click: `command -v btop || command -v htop || echo top` on that 
 `test_logic.mjs`). `mod.json` docks it at the bottom (`"place": "bottom", "size": 28`); the repo's
 `main-plus` layout puts it at the right of the status row, 420px wide.
 
-**Watch out:** `/proc` and amdgpu sysfs are Linux-only; on macOS the bar says `CPU / MEM unavailable`.
+On a machine without `/proc/stat`, such as macOS, it runs one constant script instead, `MAC_LOAD_SCRIPT`
+in `logic.mjs`: `sysctl -n hw.ncpu hw.memsize`, the summed `ps -A -o %cpu=`, and `vm_stat`. `macLoad`
+turns that into CPU as the summed %CPU over the core count, and memory in use as Activity Monitor's
+Memory Used: anonymous minus purgeable, wired and compressed pages. The machine is then read that way
+until the shown space moves to another machine.
+
+**Watch out:** amdgpu sysfs is Linux-only. macOS CPU comes from `ps`, which averages over a few
+seconds, so its sparkline is smoother than Linux's.
 NVIDIA and Intel GPUs aren't shown. Reads for a machine that is away fail quietly and show `—`.
 
 **Done when:** `herdr-app check mods/sysstat` passes, `node mods/sysstat/test_logic.mjs` prints `ok`,

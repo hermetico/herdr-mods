@@ -1,7 +1,7 @@
 // Self-check for spaces-plus' pure helpers (no window needed): node mods/spaces-plus/test_logic.mjs
 import assert from "node:assert/strict";
 import * as extras from "./extras.mjs";
-import { assignPorts, changedCount, cpuPercent, cpuTimes, duration, isWsl, memPercent, parseListeners, portUrl, prsByBranch, spaceName, tabLabel, tilde } from "./extras.mjs";
+import { assignPorts, changedCount, cpuPercent, macLoad, cpuTimes, duration, isWsl, memPercent, parseListeners, portUrl, prsByBranch, spaceName, tabLabel, tilde } from "./extras.mjs";
 
 assert.equal(tilde("/home/alex/code/x"), "~/code/x");
 assert.equal(changedCount("# branch.head main\n1 .M N... a b\n? new.txt\nu UU x\n2 R. y\n# branch.ab +0 -0\n"), 4);
@@ -114,4 +114,10 @@ assert.equal(cpuPercent(a, cpuTimes("cpu  150 0 150 750 150 0 0 0\n")), 50);
 assert.equal(cpuPercent(null, a), null);
 assert.equal(memPercent("MemTotal: 1000 kB\nMemAvailable: 250 kB\n"), 75);
 assert.equal(memPercent(null), null);
+// macLoad: a made-up 8-core, 16 GiB Mac with 16 KiB pages.
+const mac = "8\n17179869184\n200.5\nMach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:  1000.\nPages wired down:  65536.\nPages purgeable:  1024.\nAnonymous pages:  263168.\nPages occupied by compressor:  65536.\n";
+assert.deepEqual(macLoad(mac), { cpu: 25, used: 16384 * (263168 - 1024 + 65536 + 65536), total: 17179869184 });
+assert.equal(macLoad("8\n17179869184\n900\n" + mac.split("\n").slice(3).join("\n")).cpu, 100);
+assert.equal(macLoad("garbage"), null);
+assert.equal(macLoad(null), null);
 console.log("ok");

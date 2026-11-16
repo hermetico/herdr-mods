@@ -12,7 +12,7 @@
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, HoverCard } from "gpui-base";
 import { spaces, machines, panes, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout, readTextFile, appHome } from "herdr";
-import { PORTS_SCRIPT, assignPorts, changedCount, ciStatus, cpuPercent, prCard, cpuTimes, duration, isWsl, machineStatus, memPercent, offlineTimes, parseListeners, portUrl, prsByBranch, spaceName, tabLabel, tilde } from "./extras.mjs";
+import { MAC_LOAD_SCRIPT, macLoad, PORTS_SCRIPT, assignPorts, changedCount, ciStatus, cpuPercent, prCard, cpuTimes, duration, isWsl, machineStatus, memPercent, offlineTimes, parseListeners, portUrl, prsByBranch, spaceName, tabLabel, tilde } from "./extras.mjs";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -79,6 +79,7 @@ export default class Spaces extends View {
     this.sharesLocalhost = new Map(); // spaces-plus: machine -> true when its localhost is this computer's (WSL under a Windows app)
     this.prs = {}; // repo -> { at, branches: Map branch -> { number, state, draft, url } }
     this.load = {}; // machine ("" here) -> { prev, cpu, mem }
+    this.macs = new Set(); // spaces-plus: machines read with MAC_LOAD_SCRIPT (no /proc)
     this.refreshMachines(cx);
     this.refreshPorts(cx);
     cx.timer.every(10000, (cx) => this.refreshPorts(cx));
@@ -223,6 +224,12 @@ export default class Spaces extends View {
     cx.spawn(async (cx) => {
       for (const m of names) {
         const on = m || null;
+        // spaces-plus: macOS has no /proc; a machine without it is read with MAC_LOAD_SCRIPT.
+        if (this.macs.has(m) || (await readTextFile("/proc/stat", { on }).catch(() => null)) === null) {
+          const load = macLoad((await exec("sh", ["-c", MAC_LOAD_SCRIPT], { on }).catch(() => null))?.stdout);
+          if (load) { this.macs.add(m); this.load[m] = { prev: null, cpu: load.cpu, mem: Math.round((100 * load.used) / load.total) }; continue; }
+          this.macs.delete(m);
+        }
         const [stat, mem] = await Promise.all([readTextFile("/proc/stat", { on }).catch(() => null), readTextFile("/proc/meminfo", { on }).catch(() => null)]);
         const now = cpuTimes(stat);
         const old = this.load[m];

@@ -41,3 +41,20 @@ export const push = (hist, v) => [...hist, v].slice(-SAMPLES);
 
 // The card's line under the CPU graph: average and peak of the samples shown.
 export const spread = (hist) => (hist.length ? { avg: Math.round(hist.reduce((a, b) => a + b, 0) / hist.length), peak: Math.max(...hist) } : null);
+
+// macOS has no /proc: one constant script prints the core count, the memory size, the summed %CPU of
+// every process and vm_stat, and macLoad turns that into the same numbers the /proc readers give.
+export const MAC_LOAD_SCRIPT = `sysctl -n hw.ncpu hw.memsize && ps -A -o %cpu= | awk '{s+=$1} END {print s+0}' && vm_stat`;
+
+/** MAC_LOAD_SCRIPT's output as { cpu (%), used, total (bytes) }, or null. Memory in use is what
+ *  Activity Monitor calls Memory Used: app memory (anonymous minus purgeable), wired and compressed. */
+export function macLoad(out) {
+  const lines = (out ?? "").split("\n");
+  const [cores, total, cpu] = lines.slice(0, 3).map(Number);
+  const page = Number(out?.match(/page size of (\d+) bytes/)?.[1]);
+  const pages = (name) => Number(out?.match(new RegExp(`^${name}:\\s+(\\d+)\\.?$`, "m"))?.[1]);
+  const [anon, purgeable, wired, compressed] = ["Anonymous pages", "Pages purgeable", "Pages wired down", "Pages occupied by compressor"].map(pages);
+  if (!(cores > 0) || !(total > 0) || !Number.isFinite(cpu) || !(page > 0) || ![anon, wired, compressed].every(Number.isFinite)) return null;
+  const used = Math.min(total, Math.max(0, (anon - (purgeable || 0) + wired + compressed) * page));
+  return { cpu: Math.max(0, Math.min(100, Math.round(cpu / cores))), used, total };
+}

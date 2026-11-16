@@ -4,7 +4,7 @@
 import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex, HoverCard } from "gpui-base";
 import { exec, readTextFile, run, spaces, theme } from "herdr";
-import { SAMPLES, cpuPercent, cpuTimes, gib, gpu, memory, push, spread } from "./logic.mjs";
+import { MAC_LOAD_SCRIPT, SAMPLES, cpuPercent, cpuTimes, gib, gpu, macLoad, memory, push, spread } from "./logic.mjs";
 
 const read = (path, on) => readTextFile(path, { on }).catch(() => null);
 
@@ -27,13 +27,25 @@ export default class Sysstat extends View {
   refresh(cx) {
     const on = spaces().find((s) => s.active)?.machine ?? null;
     if (on !== this.machine) {
-      Object.assign(this, { machine: on, previous: null, cpu: null, hist: [], mem: null, gpu: null, gpuDir: undefined, error: false });
+      Object.assign(this, { machine: on, previous: null, cpu: null, hist: [], mem: null, gpu: null, gpuDir: undefined, error: false, mac: false });
       cx.notify();
     }
     if (this.busy) return;
     this.busy = true;
     cx.spawn(async (cx) => {
       try {
+        // macOS: no /proc. Once a machine has none, read it with MAC_LOAD_SCRIPT from then on.
+        if (this.mac || (await read("/proc/stat", on)) === null) {
+          const load = macLoad((await exec("sh", ["-c", MAC_LOAD_SCRIPT], { on }).catch(() => null))?.stdout);
+          if (on !== this.machine) return;
+          this.mac = Boolean(load);
+          if (load) {
+            Object.assign(this, { cpu: load.cpu, mem: { used: load.used, total: load.total }, error: false });
+            this.hist = push(this.hist, load.cpu);
+            cx.notify();
+            return;
+          }
+        }
         const [stat, mem] = await Promise.all([read("/proc/stat", on), read("/proc/meminfo", on)]);
         if (on !== this.machine) return; // the shown space moved to another machine while reading
         const now = cpuTimes(stat);
