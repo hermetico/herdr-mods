@@ -44,8 +44,8 @@ Click opens it on GitHub.
 **How it behaves:** click a space to switch, a tab row to select that tab; right-click and drag as in
 `spaces`. Working times refresh every 30 s. Git is re-read when the space's folder changes. Ports are
 read every 10 s per machine, from a constant script: `ss -ltnpH` plus each listener's `/proc/<pid>/cwd`
-on Linux, `lsof` on macOS. A socket belongs to the space whose folder holds the program's folder most
-closely (a worktree's server shows on the worktree, not on the checkout around it); home folders take
+on Linux, `lsof` on macOS. A socket belongs to the space whose folder, or one of whose panes' live folders, holds the
+program's folder most closely (a worktree's server shows on the worktree, not on the checkout around it); home folders take
 none; ports from 32768 up (private, ephemeral sockets) and the agents' own (`claude`, `codex`,
 `opencode`, `pi`, `hermes`) are left out. Pull requests come from
 `gh pr list --state all --json number,headRefName,state,isDraft,url,statusCheckRollup` per repo, at most

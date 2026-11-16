@@ -87,6 +87,20 @@ export function assignPorts(listeners, folders) {
   return out;
 }
 
+/** The folders a space's programs may run in: its own place first, then every pane's live folder,
+ *  so a server started from a tab in a repo shows on its space even when the space sits at home. */
+export function spaceFolders(place, paneFolders) {
+  return [...new Set([place, ...(paneFolders ?? [])].filter(Boolean))];
+}
+
+/** A space's ports: those of each of its folders (assignPorts' map, keyed by machine and folder),
+ *  once per port, lowest first. */
+export function portsOf(ports, machine, folders) {
+  const seen = new Map();
+  for (const f of folders) for (const p of ports.get(JSON.stringify([machine, f.replace(/\/+$/, "")])) ?? []) if (!seen.has(p.port)) seen.set(p.port, p);
+  return [...seen.values()].sort((a, b) => a.port - b.port);
+}
+
 /** Whether a machine's /proc/sys/kernel/osrelease is a WSL kernel ("…-microsoft-standard-WSL2"). */
 export const isWsl = (osrelease) => /microsoft|wsl/i.test(osrelease ?? "");
 

@@ -12,7 +12,7 @@
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, HoverCard } from "gpui-base";
 import { spaces, machines, panes, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout, readTextFile, appHome } from "herdr";
-import { MAC_LOAD_SCRIPT, macLoad, PORTS_SCRIPT, assignPorts, changedCount, ciStatus, cpuPercent, prCard, cpuTimes, duration, isWsl, machineStatus, memPercent, offlineTimes, parseListeners, portUrl, prsByBranch, spaceName, tabLabel, tilde } from "./extras.mjs";
+import { MAC_LOAD_SCRIPT, macLoad, PORTS_SCRIPT, assignPorts, portsOf, spaceFolders, changedCount, ciStatus, cpuPercent, prCard, cpuTimes, duration, isWsl, machineStatus, memPercent, offlineTimes, parseListeners, portUrl, prsByBranch, spaceName, tabLabel, tilde } from "./extras.mjs";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -32,6 +32,11 @@ function place(s, ps) {
   const tabs = new Set((s.tabs ?? []).map((c) => c.id));
   return ps.find((p) => tabs.has(p.tab) && p.cwd)?.cwd || s.folder;
 }
+// spaces-plus: the space's place and every live folder of its panes.
+const folders = (s, ps) => {
+  const tabs = new Set((s.tabs ?? []).map((c) => c.id));
+  return spaceFolders(place(s, ps), ps.filter((p) => tabs.has(p.tab) && p.cwd).map((p) => p.cwd));
+};
 const rowHeight = ({ tree }, two) => (two ? 40 : tree ? 28 : 30);
 const where = (s, ps) => JSON.stringify([s.machine ?? null, place(s, ps)]);
 const base = (path) => path.replace(/\/+$/, "").split("/").pop();
@@ -166,7 +171,8 @@ export default class Spaces extends View {
     const byMachine = new Map();
     for (const s of sp) {
       const m = s.machine ?? null;
-      byMachine.set(m, [...(byMachine.get(m) ?? []), place(s, ps)]);
+      // spaces-plus: every pane's folder too, so a server run from a tab in a repo finds its space.
+      byMachine.set(m, [...(byMachine.get(m) ?? []), ...folders(s, ps)]);
     }
     cx.spawn(async (cx) => {
       const next = new Map();
@@ -282,7 +288,8 @@ export default class Spaces extends View {
         .on_click((_e, cx) => { cx.stop_propagation(); cx.open_url(pr.url); })
         .child(`#${pr.number}`)));
     }
-    for (const p of this.ports.get(JSON.stringify([w.machine ?? null, place(w, ps)])) ?? []) {
+    // spaces-plus: the ports of the space's place and of each of its panes' folders.
+    for (const p of portsOf(this.ports, w.machine ?? null, folders(w, ps))) {
       const url = portUrl(p, w.machine ?? null, this.sharesLocalhost.get(w.machine) === true);
       out.push(div().id(`port-${w.id}-${p.port}`).flex_none().text_color(t.accent).hover((s) => s.text_color(t.foreground))
         .tooltip(`${p.name} listens on ${p.host}:${p.port}\nclick: open ${url}`)

@@ -11,6 +11,7 @@ a version (see [AGENTS.md](AGENTS.md#releases)).
 ### Added
 
 - **spaces-plus, sysstat:** CPU and memory on macOS machines too, this computer included. Memory in use matches Activity Monitor's Memory Used.
+- **spaces-plus:** a port shows on its space when any of the space's panes is in the program's folder, not only the space's own folder, so a server started from a tab in a repo shows on a space that sits at home.
 
 ### Changed
 

@@ -1,7 +1,7 @@
 // Self-check for spaces-plus' pure helpers (no window needed): node mods/spaces-plus/test_logic.mjs
 import assert from "node:assert/strict";
 import * as extras from "./extras.mjs";
-import { assignPorts, changedCount, cpuPercent, macLoad, cpuTimes, duration, isWsl, memPercent, parseListeners, portUrl, prsByBranch, spaceName, tabLabel, tilde } from "./extras.mjs";
+import { assignPorts, changedCount, cpuPercent, macLoad, portsOf, spaceFolders, cpuTimes, duration, isWsl, memPercent, parseListeners, portUrl, prsByBranch, spaceName, tabLabel, tilde } from "./extras.mjs";
 
 assert.equal(tilde("/home/alex/code/x"), "~/code/x");
 assert.equal(changedCount("# branch.head main\n1 .M N... a b\n? new.txt\nu UU x\n2 R. y\n# branch.ab +0 -0\n"), 4);
@@ -120,4 +120,14 @@ assert.deepEqual(macLoad(mac), { cpu: 25, used: 16384 * (263168 - 1024 + 65536 +
 assert.equal(macLoad("8\n17179869184\n900\n" + mac.split("\n").slice(3).join("\n")).cpu, 100);
 assert.equal(macLoad("garbage"), null);
 assert.equal(macLoad(null), null);
+// A space at home with a tab in a repo: the repo's server shows on it, once.
+const homeSpace = spaceFolders("/home/alex", ["/home/alex", "/home/alex/acme/web", "/home/alex/acme/web"]);
+assert.deepEqual(homeSpace, ["/home/alex", "/home/alex/acme/web"]);
+// Keyed as main.js keeps it: [machine, folder].
+const portMap = new Map([...assignPorts([
+  { host: "localhost", port: 5173, pid: 1, name: "node", cwd: "/home/alex/acme/web" },
+  { host: "localhost", port: 8000, pid: 2, name: "python3", cwd: "/home/alex/other" },
+], homeSpace)].map(([f, list]) => [JSON.stringify([null, f]), list]));
+assert.deepEqual(portsOf(portMap, null, homeSpace).map((p) => p.port), [5173]);
+assert.deepEqual(portsOf(portMap, "devbox", homeSpace), []);
 console.log("ok");
