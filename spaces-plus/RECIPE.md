@@ -50,7 +50,6 @@ Click opens it on GitHub.
   shows why (`ssh timeout`, `connection refused`, `host key`) and since when, with the full error on hover.
 - **Recent spaces** (up to 3, clock icon, `name · ~/folder`) under a machine with no spaces; click
   reopens one with `space.new`.
-- An unnamed `~` space takes the name of the agent running in it (`pi`, `claude`).
 
 **How it behaves:** click a space to switch, a tab row to select that tab; right-click and drag as in
 `spaces`. Working times refresh every 30 s. Git is re-read when the space's folder changes. Ports are
@@ -67,7 +66,7 @@ slow `gh` never holds up the port chips). Machine load reads `/proc/stat` and
 a rail nothing is polled: the rail shows none of it.
 
 **Built from:** a copy of the shipped `spaces` mod (herdr-app 0.1.12). Its own helpers are in
-`extras.mjs` (pure: `tilde`, `tabLabel`, `spaceName`, `changedCount`, `PORTS_SCRIPT`, `parseListeners`,
+`extras.mjs` (pure: `tilde`, `tabLabel`, `changedCount`, `PORTS_SCRIPT`, `parseListeners`,
 `assignPorts`, `portUrl`, `isWsl`, `prsByBranch`, CPU/memory parsing). Uses `exec("sh", ["-c", PORTS_SCRIPT], { on })`,
 `exec("gh", …)`, `cx.open_url(url)` in the click handlers, `window()?.platform`, `readTextFile("/proc/…", { on })`,
 `spaces()`, `machines()`, `panes()` (tab titles, agent names), `exec("git", ["status", "--porcelain=v2", "--branch"])`,

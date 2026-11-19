@@ -8,6 +8,10 @@ a version (see [AGENTS.md](AGENTS.md#releases)).
 
 ## [Unreleased]
 
+### Removed
+
+- **spaces-plus:** an unnamed `~` space shows its own name again instead of its agent's, so the sidebar matches Herdr and `hc`; the agent dots show what runs in it.
+
 ### Added
 
 - **spaces-plus:** drag a machine by the grip on its header to reorder the machines; the order is kept. A click on the header still folds it.

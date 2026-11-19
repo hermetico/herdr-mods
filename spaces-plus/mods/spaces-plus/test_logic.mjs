@@ -1,7 +1,7 @@
 // Self-check for spaces-plus' pure helpers (no window needed): node mods/spaces-plus/test_logic.mjs
 import assert from "node:assert/strict";
 import * as extras from "./extras.mjs";
-import { machineOrder, moveMachine, assignPorts, changedCount, cpuPercent, macLoad, portsOf, spaceFolders, cpuTimes, duration, isWsl, memPercent, parseListeners, portUrl, prsByBranch, spaceName, tabLabel, tilde } from "./extras.mjs";
+import { machineOrder, moveMachine, assignPorts, changedCount, cpuPercent, macLoad, portsOf, spaceFolders, cpuTimes, duration, isWsl, memPercent, parseListeners, portUrl, prsByBranch, tabLabel, tilde } from "./extras.mjs";
 
 assert.equal(tilde("/home/alex/code/x"), "~/code/x");
 assert.equal(changedCount("# branch.head main\n1 .M N... a b\n? new.txt\nu UU x\n2 R. y\n# branch.ab +0 -0\n"), 4);
@@ -12,9 +12,6 @@ const ps = [{ tab: "t1", terminal: "t1n", title: "⠋ Open herdr-app session", p
 assert.equal(tabLabel({ id: "t1", index: 1, name: "1", named: false }, ps), "1 · Open herdr-app session");
 assert.equal(tabLabel({ id: "t1", index: 1, name: "fix", named: true }, ps), "fix");
 assert.equal(tabLabel({ id: "t2", index: 2, name: "2", named: false }, ps), "2");
-assert.equal(spaceName({ name: "~", named: false, tabs: [{ id: "t1" }] }, ps), "hermes");
-assert.equal(spaceName({ name: "~", named: true, tabs: [{ id: "t1" }] }, ps), "~");
-assert.equal(spaceName({ name: "api", named: false, tabs: [{ id: "t1" }] }, ps), "api");
 
 // Ports: what PORTS_SCRIPT prints (ss on Linux; lsof on macOS prints the same shape).
 const out = [

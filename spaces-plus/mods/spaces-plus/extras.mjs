@@ -21,13 +21,6 @@ export function tabLabel(tab, ps) {
   return tab.named || !telling ? tab.name : `${tab.index} \u00b7 ${live}`;
 }
 
-// What a space is called: its name, or for an unnamed home space ("~") the agent in it.
-export function spaceName(w, ps) {
-  if (w.named || w.name !== "~") return w.name;
-  const tabs = new Set(w.tabs.map((t) => t.id));
-  return ps.find((p) => tabs.has(p.tab) && p.program?.agent)?.program?.name?.toLowerCase() || w.name;
-}
-
 // Changed files in `git status --porcelain=v2` output: tracked changes, conflicts and untracked.
 export function changedCount(out) {
   return out.split("\n").filter((l) => /^[12u?] /.test(l)).length;

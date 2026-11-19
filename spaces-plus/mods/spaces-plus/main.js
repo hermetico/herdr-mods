@@ -1,7 +1,7 @@
 // spaces-plus: a copy of Herdr's shipped `spaces` mod. Adds: a second line (folder, tab count,
 // git with changed-file count), the space's agent status, the active space's tabs (settled ones
 // folded), space counts and state on machine rows, and recent spaces to reopen under an empty machine.
-// An unnamed "~" space shows its agent's name. Also: the ports a space's programs listen on (click:
+// Also: the ports a space's programs listen on (click:
 // open in the browser), the pull request of its branch (gh; click: open it), CPU and memory on
 // machine rows. Its own helpers live in extras.mjs. Merge `spaces` updates via the repo's upstream branch.
 // Workspace spaces: stable colored avatars, worktrees under their checkout,
@@ -12,7 +12,7 @@
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, HoverCard } from "gpui-base";
 import { agents, spaces, machines, panes, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout, readTextFile, appHome } from "herdr";
-import { machineOrder, moveMachine, MAC_LOAD_SCRIPT, macLoad, PORTS_SCRIPT, assignPorts, portsOf, spaceFolders, changedCount, ciStatus, cpuPercent, prCard, cpuTimes, duration, isWsl, machineStatus, memPercent, offlineTimes, parseListeners, portUrl, prsByBranch, spaceName, tabLabel, tilde } from "./extras.mjs";
+import { machineOrder, moveMachine, MAC_LOAD_SCRIPT, macLoad, PORTS_SCRIPT, assignPorts, portsOf, spaceFolders, changedCount, ciStatus, cpuPercent, prCard, cpuTimes, duration, isWsl, machineStatus, memPercent, offlineTimes, parseListeners, portUrl, prsByBranch, tabLabel, tilde } from "./extras.mjs";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -625,7 +625,7 @@ export default class Spaces extends View {
 
   row({ w, i, g, tree }, t, ps) {
     const on = w.active;
-    const name = spaceName(w, ps);
+    const name = w.name;
     const second = tree ? null : this.detail(w, g, name, t, ps);
     return v_flex()
       .relative()
