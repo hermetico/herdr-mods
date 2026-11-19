@@ -11,8 +11,8 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, HoverCard } from "gpui-base";
-import { spaces, machines, panes, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout, readTextFile, appHome } from "herdr";
-import { MAC_LOAD_SCRIPT, macLoad, PORTS_SCRIPT, assignPorts, portsOf, spaceFolders, changedCount, ciStatus, cpuPercent, prCard, cpuTimes, duration, isWsl, machineStatus, memPercent, offlineTimes, parseListeners, portUrl, prsByBranch, spaceName, tabLabel, tilde } from "./extras.mjs";
+import { agents, spaces, machines, panes, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout, readTextFile, appHome } from "herdr";
+import { machineOrder, moveMachine, MAC_LOAD_SCRIPT, macLoad, PORTS_SCRIPT, assignPorts, portsOf, spaceFolders, changedCount, ciStatus, cpuPercent, prCard, cpuTimes, duration, isWsl, machineStatus, memPercent, offlineTimes, parseListeners, portUrl, prsByBranch, spaceName, tabLabel, tilde } from "./extras.mjs";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -80,6 +80,7 @@ export default class Spaces extends View {
     this.folded = new Set(JSON.parse(localStorage.getItem("machines.folded") ?? "[]"));
     this.recent = [];
     this.showSettled = false;
+    this.tabsShown = localStorage.getItem("tabs.shown") !== "false"; // spaces-plus: the tab rows under the active space
     this.ports = new Map(); // JSON [machine, folder] -> [{ host, port, name }]
     this.sharesLocalhost = new Map(); // spaces-plus: machine -> true when its localhost is this computer's (WSL under a Windows app)
     this.prs = {}; // repo -> { at, branches: Map branch -> { number, state, draft, url } }
@@ -446,7 +447,7 @@ export default class Spaces extends View {
   grouped(t, collapsed) {
     const rows = this.ordered();
     const ps = panes();
-    const draw = (r) => (collapsed ? [this.compact(r, t)] : [this.row(r, t, ps), ...(r.w.active ? this.tabRows(r.w, t, ps) : [])]);
+    const draw = (r) => (collapsed ? [this.compact(r, t)] : [this.row(r, t, ps), ...(r.w.active && this.tabsShown ? this.tabRows(r.w, t, ps) : [])]);
     const remote = [...new Set([...rows.map(r => r.w.machine).filter(Boolean), ...this.machines.map(m => m.name), ...Object.keys(this.reconnecting)])].sort();
     const loading = m => {
       const layout = machines().find(k => k.name === m)?.layout;
@@ -455,8 +456,10 @@ export default class Spaces extends View {
     };
     const loadingRow = m => div().id(`machine-loading-${m ?? "local"}`).h(28).flex_none().px(8).text_size(12).text_color(t.dim).child(collapsed ? "…" : "Loading…");
     if (!remote.length) return loading(null) && !rows.length ? [loadingRow(null)] : rows.flatMap(draw);
-    const machineNames = [null, ...remote];
-    return machineNames.flatMap((m) => {
+    // spaces-plus: machines in the person's order (drag a header), each a card holding its spaces.
+    const order = machineOrder(["", ...remote], shared("machines.order"));
+    const machineNames = order.map((k) => k || null);
+    return machineNames.map((m) => {
       const mine = rows.filter((r) => (r.w.machine ?? null) === m);
       const repair = this.reconnecting[m];
       const machine = this.machines.find(k => k.name === m) ?? repair?.machine;
@@ -464,20 +467,23 @@ export default class Spaces extends View {
       const rebuilt = this.rebuilt(machine) || !!repair;
       const offline = connected ? null : machineStatus(machine, this.offlineSince[m]);
       const folded = this.folded.has(m);
-      const head = h_flex().id(`machine-${m ?? "local"}`).h(26).flex_none().px(collapsed ? 2 : 8).gap(7).items_center().text_size(11).text_color(t.dim)
+      // spaces-plus: a press on the header starts a drag; released on the same card it folds it.
+      const key = m ?? "";
+      const head = h_flex().id(`machine-${m ?? "local"}`).h(30).flex_none().px(collapsed ? 2 : 8).gap(7).items_center().rounded(7).text_size(11.5).text_color(t.dim)
         .when(Boolean(offline), el => el.opacity(0.7).tooltip(offline.tooltip))
         .cursor_pointer().hover(s => s.bg(t.hover))
-        .on_click((_e, cx) => {
-          folded ? this.folded.delete(m) : this.folded.add(m);
-          localStorage.setItem("machines.folded", JSON.stringify([...this.folded]));
-          cx.notify();
-        })
-        .child(svg(`mods/workspace-chrome/${m ? "server" : "monitor"}.svg`).size(13).flex_none())
-        .when(!collapsed, el => el.child(div().flex_shrink(1).min_w(0).truncate().child(m ?? "This computer"))
-          .when(mine.length > 0, el => el.child(div().flex_none().child(`(${mine.length})`)))
+        .on_click(() => this.fold(m))
+        .when(!collapsed, el => el.ml(-4).child(div().id(`machine-grip-${m ?? "local"}`).flex_none().py(3).rounded(4).cursor_grab().text_color(t.dim)
+          .hover(s => s.text_color(t.foreground).bg(t.raised))
+          .tooltip("Drag to reorder")
+          .on_mouse_down("left", (_e, cx) => { cx.stop_propagation(); this.machinePressed = key; this.machineOver = key; cx.notify(); })
+          .child(svg("mods/spaces-plus/grip.svg").size(13))))
+        .child(svg(`mods/workspace-chrome/${m ? "server" : "monitor"}.svg`).size(13).flex_none().text_color(connected ? t.muted : t.dim))
+        .when(!collapsed, el => el.child(div().flex_shrink(1).min_w(0).truncate().font_semibold().text_color(connected ? t.foreground : t.dim).child(m ?? "This computer"))
+          .when(mine.length > 0, el => el.child(div().flex_none().px(5).h(16).rounded(4).bg(t.raised).text_size(10).text_color(t.muted).flex().items_center().child(String(mine.length))))
           .child(div().flex_1())
           .when(connected && Boolean(this.load[m ?? ""]), el => el.child(this.loadChip(this.load[m ?? ""], t, m)))
-          .when(Boolean(m) && connected && !this.load[m], el => el.child(div().flex_none().text_size(10.5).text_color(t.ansi2).child("connected")))
+          // spaces-plus: no "connected" word: the green dot says it, and the name keeps the room.
           .when(rebuilt, el => el.child(h_flex().flex_none().gap(3).items_center()
             .child(div().max_w(140).truncate().child(repair?.error || "rebuilt ·"))
             .child(div().id(`machine-connect-${m}`).text_color(repair?.error ? t.blocked : t.muted)
@@ -493,7 +499,8 @@ export default class Spaces extends View {
         .text_size(12).text_color(t.dim).hover(s => s.bg(t.hover).text_color(t.foreground))
         .on_click(() => run("space.new", { machine: m ?? "" }))
         .child(svg("mods/workspace-chrome/plus.svg").size(12)).when(!collapsed, el => el.child("New space there"));
-      if (!collapsed && rebuilt) return [head];
+      const card = (rows) => this.machineCard(key, order, rows, t, collapsed);
+      if (!collapsed && rebuilt) return card([head]);
       // An empty machine offers its recently closed spaces back, up to three.
       const again = collapsed || !connected ? [] : this.recent.filter((r) => (r.machine ?? null) === m && r.folder).slice(0, 3).map((r, n) =>
         h_flex().id(`recent-${m ?? "local"}-${n}`).h(24).flex_none().px(8).gap(7).items_center().rounded(7)
@@ -503,8 +510,38 @@ export default class Spaces extends View {
           .child(svg("mods/workspace-chrome/clock.svg").size(12).flex_none().text_color(t.dim))
           .child(div().min_w(0).truncate().child(`${r.name} \u00b7 ${tilde(r.folder)}`)));
       const status = !collapsed && offline && !rebuilt ? [div().id(`machine-status-${m}`).h(18).flex_none().pl(28).text_size(10.5).text_color(t.dim).tooltip(offline.tooltip).child(offline.text)] : [];
-      return [head, ...status, ...(folded ? [] : mine.length ? mine.flatMap(draw) : connected ? [loading(m) ? loadingRow(m) : empty, ...again] : [])];
+      return card([head, ...status, ...(folded ? [] : mine.length ? mine.flatMap(draw) : connected ? [loading(m) ? loadingRow(m) : empty, ...again] : [])]);
     });
+  }
+
+  fold(m) {
+    this.folded.has(m) ? this.folded.delete(m) : this.folded.add(m);
+    localStorage.setItem("machines.folded", JSON.stringify([...this.folded]));
+  }
+
+  // spaces-plus: one machine's card. Dragging a header's grip over another card shows where it
+  // lands, and releasing moves it there.
+  machineCard(key, order, rows, t, collapsed) {
+    const from = this.machinePressed ?? null, here = from !== null && this.machineOver === key && from !== key;
+    const below = here && order.indexOf(from) < order.indexOf(key);
+    return v_flex().id(`machine-card-${key || "local"}`).relative().flex_none().gap(1)
+      .when(!collapsed, (el) => el.p(4).rounded(10).border_1().border_color(t.border).bg(t.background))
+      .when(from === key && this.machineOver !== key, (el) => el.opacity(0.5))
+      .when(here, (el) => el.child(div().absolute().left(6).right(6).h(2).rounded(1).bg(t.accent).when(below, (l) => l.bottom(-6)).when(!below, (l) => l.top(-6))))
+      .on_mouse_move((_e, cx) => {
+        if (this.machinePressed == null || this.machineOver === key) return;
+        this.machineOver = key;
+        cx.notify();
+      })
+      .on_mouse_up("left", (_e, cx) => {
+        const start = this.machinePressed;
+        this.machinePressed = null;
+        this.machineOver = null;
+        if (start == null) return;
+        if (start !== key) setShared("machines.order", moveMachine(order, start, key));
+        cx.notify();
+      })
+      .children(rows);
   }
 
   // Only what's unusual, after the name: "herdr \u00b7 spike \u21912 \u21931". The repo or
@@ -590,9 +627,6 @@ export default class Spaces extends View {
     const on = w.active;
     const name = spaceName(w, ps);
     const second = tree ? null : this.detail(w, g, name, t, ps);
-    const colors = shared("space.colors") ?? {};
-    const color = colors[w.id] ?? "ansi6";
-    const fill = color.startsWith("#") ? color : (MARK[color] ?? t[color]);
     return v_flex()
       .relative()
       .id(`space-${w.id}`)
@@ -636,15 +670,24 @@ export default class Spaces extends View {
           .gap(9)
           .items_center()
           .when(Boolean(tree), el => el.pl(22).child(svg("mods/workspace-chrome/branch.svg").size(13).text_color(t.dim)))
-          // spaces-plus: outlined avatar in the space's color, so it sits in the theme instead of a bright tile.
-          .when(!tree, el => el.child(h_flex().size(18).flex_none().rounded(5).border_1().border_color(fill).items_center().justify_center().text_size(10.5).font_bold().text_color(fill).child([...name][0]?.toUpperCase() ?? "?")))
+          // spaces-plus: one dot per agent in the space, in its status color, where the letter avatar was.
+          .when(!tree, el => el.child(this.agentDots(w, t)))
           .child(v_flex().flex_1().min_w(0).gap(1)
             .child(h_flex().min_w(0).gap(5).items_center()
               .child(div().flex_shrink(0).max_w(150).truncate().text_color(t.foreground).child(name))
               .child(tree && g ? this.gitTail(g, tree, name, t, this.chips(w, g, t, ps)) : div().flex_1()))
             .when(Boolean(second), (el) => el.child(second)))
-          .when(Boolean(this.status(t, w.status)), (el) => el.child(this.status(t, w.status))),
+          .when(w.status === "blocked", (el) => el.child(this.status(t, w.status))),
       );
+  }
+
+  // spaces-plus: up to four dots, two by two, for the space's agents; none when it has no agent.
+  agentDots(w, t) {
+    const list = agents().filter((a) => a.space === w.id).slice(0, 4);
+    const dot = (a) => div().id(`agent-dot-${a.pane}`).size(list.length === 1 ? 8 : 6).rounded(4).flex_none()
+      .bg(t[a.status] ?? t.idle).when(a.status === "idle", (d) => d.opacity(0.6))
+      .tooltip(`${a.title || a.app || "Agent"}: ${a.status === "blocked" ? "needs you" : a.status}`);
+    return h_flex().w(18).h(18).flex_none().flex_wrap().gap(2).items_center().justify_center().children(list.map(dot));
   }
 
   compact({ w, i }, t) {
@@ -678,11 +721,17 @@ export default class Spaces extends View {
     if (changed) setShared("space.colors", kept);
     return v_flex().size_full().min_h(0).bg(t.chrome).text_size(13)
       .child(h_flex().h(31).pl(16).pr(10).items_center().justify_between().text_size(11.5).text_color(t.dim)
-        .when(!collapsed, el => el.child("Spaces"))
+        .when(!collapsed, el => el.child("Spaces").child(div().flex_1()))
+        // spaces-plus: show or hide the active space's tab rows.
+        .when(!collapsed, el => el.child(div().id("space-tabs").size(26).flex_none().flex().items_center().justify_center().rounded(6)
+          .text_color(this.tabsShown ? t.muted : t.dim).hover(s => s.bg(t.hover).text_color(t.foreground))
+          .tooltip(this.tabsShown ? "Hide tabs" : "Show tabs")
+          .on_click((_e, cx) => { this.tabsShown = !this.tabsShown; localStorage.setItem("tabs.shown", String(this.tabsShown)); cx.notify(); })
+          .child(svg(`mods/workspace-chrome/${this.tabsShown ? "layers" : "square"}.svg`).size(14))))
         .child(div().id("space-new").size(26).flex_none().flex().items_center().justify_center().rounded(6).hover(s => s.bg(t.hover).text_color(t.foreground))
           .on_click(() => run("space.new")).child(svg("mods/workspace-chrome/plus.svg").size(14))))
-      .child(v_flex().flex_1().min_h(0).px(8).pb(14).overflow_y_scrollbar().mode("always")
-        .on_mouse_up("left", (_e, cx) => { this.pressed = null; cx.notify(); })
+      .child(v_flex().flex_1().min_h(0).px(8).pb(14).gap(collapsed ? 0 : 8).overflow_y_scrollbar().mode("always")
+        .on_mouse_up("left", (_e, cx) => { this.pressed = null; this.machinePressed = null; this.machineOver = null; cx.notify(); })
         .children(this.grouped(t, collapsed)));
   }
 }

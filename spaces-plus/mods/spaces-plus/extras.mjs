@@ -214,3 +214,23 @@ export function macLoad(out) {
   const used = Math.min(total, Math.max(0, (anon - (purgeable || 0) + wired + compressed) * page));
   return { cpu: Math.max(0, Math.min(100, Math.round(cpu / cores))), used, total };
 }
+
+// ---- machine order: the person's, by dragging a machine's header ----
+// Keys are machine names, "" for this computer. Saved in shared "machines.order".
+
+/** The machines in the saved order; any not saved yet follow, this computer first, then by name. */
+export function machineOrder(keys, saved) {
+  const known = new Set(keys);
+  const first = (Array.isArray(saved) ? saved : []).filter((k, i, a) => known.has(k) && a.indexOf(k) === i);
+  const rest = keys.filter((k) => !first.includes(k)).sort((a, b) => (a === "" ? -1 : b === "" ? 1 : a.localeCompare(b)));
+  return [...first, ...rest];
+}
+
+/** `order` with `from` dropped on `to`: after it when dragged down, before it when dragged up. */
+export function moveMachine(order, from, to) {
+  const a = order.indexOf(from), b = order.indexOf(to);
+  if (a < 0 || b < 0 || a === b) return order;
+  const out = order.filter((k) => k !== from);
+  out.splice(out.indexOf(to) + (a < b ? 1 : 0), 0, from);
+  return out;
+}

@@ -8,18 +8,23 @@ machine offers its recently closed spaces back.
 
 ![Spaces Plus](preview.png)
 
-**What you see:** the shipped `spaces` mod (colored letter avatars, machines, worktrees under their
-checkout, drag to reorder), with:
+**What you see:** the shipped `spaces` mod (machines, worktrees under their checkout, drag to
+reorder), with:
+
+- **Agent dots** where the shipped letter avatar was: one dot per agent in the space, up to four, two by
+  two in an 18px slot, in its status color: `working`, `blocked`, `done`, or `idle` at 60%. A single
+  agent gets an 8px dot, more get 6px. Hover a dot for the agent and its status. No agent, no dot.
 
 - **A second line** (11px, `dim`) when there is something to say: the repo name if it differs from the
   space name, the branch unless it's `main`/`master`, `↑n` (`ansi2`) and `↓n` (`ansi1`) ahead/behind,
   `n changed` (tracked changes, conflicts and untracked files), and `n tabs` when there are 2 or more.
   Without git it shows the folder (`~/…`) when there are 2 or more tabs. Rows with a second line are
   40px tall; others keep the shipped 30px.
-- **Status on the right**, the space's most urgent agent: a `Needs you` pill (10.5px semibold, theme
-  `blocked` color on a 15% tint of it) when blocked, the `workspace-chrome` spinner in `working` when
-  working, a 7px `done` dot when done, nothing when idle.
-- **The active space's tabs** under it (22px rows, indented 35px) when it has 2 or more: `1 · <title>`
+- **Needs you on the right**: a `Needs you` pill (10.5px semibold, theme `blocked` color on a 15% tint
+  of it) when an agent in the space is blocked. Other states show only in the dots.
+- **The active space's tabs** under it (22px rows, indented 35px) when it has 2 or more and tabs are
+  shown. A layers icon left of `+` in the Spaces header hides or shows them; hidden, it turns into a
+  square. The choice is kept per window in `localStorage` (`tabs.shown`). `1 · <title>`
   and `working 12m` / `needs you` / `done` in that status' color. Settled tabs fold into
   `› n tabs put away`; click to unfold.
 - **Ports**, `:5173` chips in `accent` at the end of the second line (or after the branch on a worktree
@@ -34,8 +39,14 @@ checkout, drag to reorder), with:
 (`title` and `reviewDecision` come from the same `gh pr list` call), and each check with its time,
 failed first, then running, queued, passed; over 8 checks the passed ones fold into `+N passed`.
 Click opens it on GitHub.
+- **Machine cards**: each machine is a card, 10px corners, a `border` line on `background`, 4px inside,
+  8px apart. Its 30px header: a 13px grip (lucide `grip-vertical`, `grip.svg`), the machine icon, the
+  name in semibold `foreground`, and the space count in a 10px badge on `raised`. Drag the grip onto
+  another card to move the machine there: the dragged card goes to 50%, and a 2px `accent` line shows
+  where it lands, above when moving up, below when moving down. The order is in shared
+  `machines.order`. A click elsewhere on the header folds the card. The narrow rail draws no cards.
 - **Machine rows** add the number of spaces, and CPU (`muted`) and memory (`dim`) in use (`12% 45%`, red from 90%) on
-  connected machines; a remote without a reading yet shows a green `connected`. An unreachable machine
+  connected machines. An unreachable machine
   shows why (`ssh timeout`, `connection refused`, `host key`) and since when, with the full error on hover.
 - **Recent spaces** (up to 3, clock icon, `name · ~/folder`) under a machine with no spaces; click
   reopens one with `space.new`.

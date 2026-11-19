@@ -10,13 +10,16 @@ a version (see [AGENTS.md](AGENTS.md#releases)).
 
 ### Added
 
+- **spaces-plus:** drag a machine by the grip on its header to reorder the machines; the order is kept. A click on the header still folds it.
+- **spaces-plus:** a button in the Spaces header hides or shows the tab rows under the active space.
 - **spaces-plus, sysstat:** CPU and memory on macOS machines too, this computer included. Memory in use matches Activity Monitor's Memory Used.
 - **spaces-plus:** a port shows on its space when any of the space's panes is in the program's folder, not only the space's own folder, so a server started from a tab in a repo shows on a space that sits at home.
 
 ### Changed
 
 - **agents-ids, sysstat:** an agent or stats bar on another machine shows that machine's Spaces icon instead of its name, so an agent's title isn't cut short; hover the agent's icon (or open the stats card) for the name.
-- **spaces-plus:** a machine row's space count reads `(2)` rather than a bare `2` after the name.
+- **spaces-plus:** a space shows one dot per agent in it, colored by status, instead of its letter avatar; the spinner and done dot on the right are gone, `Needs you` stays.
+- **spaces-plus:** each machine is a card holding its spaces, with the machine's name in bold, its space count in a small badge, and no "connected" word, since the green dot says it.
 
 ### Fixed
 

@@ -1,7 +1,7 @@
 // Self-check for spaces-plus' pure helpers (no window needed): node mods/spaces-plus/test_logic.mjs
 import assert from "node:assert/strict";
 import * as extras from "./extras.mjs";
-import { assignPorts, changedCount, cpuPercent, macLoad, portsOf, spaceFolders, cpuTimes, duration, isWsl, memPercent, parseListeners, portUrl, prsByBranch, spaceName, tabLabel, tilde } from "./extras.mjs";
+import { machineOrder, moveMachine, assignPorts, changedCount, cpuPercent, macLoad, portsOf, spaceFolders, cpuTimes, duration, isWsl, memPercent, parseListeners, portUrl, prsByBranch, spaceName, tabLabel, tilde } from "./extras.mjs";
 
 assert.equal(tilde("/home/alex/code/x"), "~/code/x");
 assert.equal(changedCount("# branch.head main\n1 .M N... a b\n? new.txt\nu UU x\n2 R. y\n# branch.ab +0 -0\n"), 4);
@@ -130,4 +130,10 @@ const portMap = new Map([...assignPorts([
 ], homeSpace)].map(([f, list]) => [JSON.stringify([null, f]), list]));
 assert.deepEqual(portsOf(portMap, null, homeSpace).map((p) => p.port), [5173]);
 assert.deepEqual(portsOf(portMap, "devbox", homeSpace), []);
+// Machine order: saved first, the rest after with this computer leading; a drag moves one.
+assert.deepEqual(machineOrder(["", "devbox", "alpha"], null), ["", "alpha", "devbox"]);
+assert.deepEqual(machineOrder(["", "devbox", "alpha"], ["devbox", "gone", ""]), ["devbox", "", "alpha"]);
+assert.deepEqual(moveMachine(["", "alpha", "devbox"], "", "devbox"), ["alpha", "devbox", ""]);
+assert.deepEqual(moveMachine(["", "alpha", "devbox"], "devbox", ""), ["devbox", "", "alpha"]);
+assert.deepEqual(moveMachine(["", "alpha"], "alpha", "alpha"), ["", "alpha"]);
 console.log("ok");
