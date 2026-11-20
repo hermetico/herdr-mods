@@ -600,7 +600,8 @@ export default class Spaces extends View {
   tabRows(w, t, ps) {
     const live = w.tabs.filter((x) => !x.settled);
     const away = w.tabs.filter((x) => x.settled);
-    if (live.length < 2 && !away.length) return [];
+    // spaces-plus: the toggle asks for the tabs, so a lone tab is listed too.
+    if (!live.length && !away.length) return [];
     const now = Date.now();
     const tabRow = (x) => {
       const word = x.status === "working" && x.working_since ? `working ${duration(now - x.working_since)}` : x.status === "blocked" ? "needs you" : x.status === "done" ? "done" : "";
@@ -611,7 +612,7 @@ export default class Spaces extends View {
         .child(div().flex_1().min_w(0).truncate().text_color(x.active ? t.foreground : t.muted).child(tabLabel(x, ps)))
         .when(Boolean(word), (el) => el.child(div().flex_none().text_size(10.5).text_color(t[x.status] ?? t.dim).child(word)));
     };
-    const rows = live.length > 1 ? live.map(tabRow) : [];
+    const rows = live.map(tabRow);
     if (away.length) {
       rows.push(h_flex().id(`settled-${w.id}`).h(22).flex_none().pl(35).pr(8).gap(5).items_center().rounded(6).text_size(11).text_color(t.dim)
         .hover((s) => s.bg(t.hover).text_color(t.foreground))

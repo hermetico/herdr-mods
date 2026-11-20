@@ -22,8 +22,8 @@ reorder), with:
   40px tall; others keep the shipped 30px.
 - **Needs you on the right**: a `Needs you` pill (10.5px semibold, theme `blocked` color on a 15% tint
   of it) when an agent in the space is blocked. Other states show only in the dots.
-- **The active space's tabs** under it (22px rows, indented 35px) when it has 2 or more and tabs are
-  shown. A layers icon left of `+` in the Spaces header hides or shows them; hidden, it turns into a
+- **The active space's tabs** under it (22px rows, indented 35px) when tabs are shown, a lone
+  tab too. A layers icon left of `+` in the Spaces header hides or shows them; hidden, it turns into a
   square. The choice is kept per window in `localStorage` (`tabs.shown`). `1 · <title>`
   and `working 12m` / `needs you` / `done` in that status' color. Settled tabs fold into
   `› n tabs put away`; click to unfold.

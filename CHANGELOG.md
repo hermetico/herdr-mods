@@ -8,6 +8,10 @@ a version (see [AGENTS.md](AGENTS.md#releases)).
 
 ## [Unreleased]
 
+### Fixed
+
+- **spaces-plus:** showing tabs lists the active space's tabs even when it has only one, so the toggle always shows something.
+
 ### Removed
 
 - **spaces-plus:** an unnamed `~` space shows its own name again instead of its agent's, so the sidebar matches Herdr and `hc`; the agent dots show what runs in it.
