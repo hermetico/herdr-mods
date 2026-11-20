@@ -12,7 +12,7 @@
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, HoverCard } from "gpui-base";
 import { agents, spaces, machines, panes, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout, readTextFile, appHome } from "herdr";
-import { machineOrder, moveMachine, MAC_LOAD_SCRIPT, macLoad, PORTS_SCRIPT, assignPorts, portsOf, spaceFolders, changedCount, ciStatus, cpuPercent, prCard, cpuTimes, duration, isWsl, machineStatus, memPercent, offlineTimes, parseListeners, portUrl, prsByBranch, tabLabel, tilde } from "./extras.mjs";
+import { machineOrder, moveMachine, MAC_LOAD_SCRIPT, macLoad, PORTS_SCRIPT, assignPorts, portsOf, spaceFolders, changedCount, ciStatus, cpuPercent, prCard, connection, cpuTimes, duration, isWsl, loginOutcome, SAFE_MACHINE, memPercent, offlineTimes, parseListeners, portUrl, prsByBranch, tabLabel, tilde } from "./extras.mjs";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -78,6 +78,10 @@ export default class Spaces extends View {
     this.reconnecting = JSON.parse(localStorage.getItem("machines.reconnecting") ?? "{}");
     for (const state of Object.values(this.reconnecting)) state.busy = false;
     this.folded = new Set(JSON.parse(localStorage.getItem("machines.folded") ?? "[]"));
+    // spaces-plus: what each machine's card shows of its login, and the login running, by machine.
+    this.logins = {};
+    this.running = {};
+    this.refused = {}; // machine -> when it was first seen needing a login, for the next-try countdown
     this.recent = [];
     this.showSettled = false;
     this.tabsShown = localStorage.getItem("tabs.shown") !== "false"; // spaces-plus: the tab rows under the active space
@@ -91,6 +95,11 @@ export default class Spaces extends View {
     cx.timer.every(10000, (cx) => this.refreshPorts(cx));
     cx.timer.every(4000, (cx) => this.refreshLoad(cx));
     cx.timer.every(15000, cx => this.refreshMachines(cx));
+    // spaces-plus: every 3 s while a machine is down, so its card keeps up.
+    cx.timer.every(3000, (cx) => {
+      const down = this.machines.some((m) => m.state !== "connected") || machines().some((m) => m.name && m.layout === "unavailable");
+      if (down || Object.keys(this.running).length) this.refreshMachines(cx);
+    });
     cx.timer.every(30000, (cx) => cx.notify()); // working-since times
     // `git status` walks the whole tree, on another machine a process there:
     // only when its answer could have changed (see `due`).
@@ -153,6 +162,7 @@ export default class Spaces extends View {
         if (r.code === 0) {
           this.machines = (JSON.parse(r.stdout).machines ?? []).filter((m) => !m.temporary);
           this.offlineSince = offlineTimes(this.machines, this.offlineSince);
+          this.afterMachines(cx);
         }
       } catch {}
       // Closed spaces (`recent` in view.json: {name, folder, machine?}); no herdr function reads them.
@@ -465,12 +475,14 @@ export default class Spaces extends View {
       const machine = this.machines.find(k => k.name === m) ?? repair?.machine;
       const connected = !m || machine?.state === "connected";
       const rebuilt = this.rebuilt(machine) || !!repair;
-      const offline = connected ? null : machineStatus(machine, this.offlineSince[m]);
+      // spaces-plus: the connection's state, and the one thing to do about it.
+      const view = m && !this.rebuilt(machine) ? connection(machine, this.offlineSince[m], this.logins[m], m, Date.now(), this.refused[m]) : null;
+      const dotColor = !view ? (connected ? t.ansi2 : t.dim) : { reconnecting: t.ansi4, logging: t.accent, unreachable: t.blocked, login: t.accent, typing: t.accent }[view.kind];
       const folded = this.folded.has(m);
       // spaces-plus: a press on the header starts a drag; released on the same card it folds it.
       const key = m ?? "";
       const head = h_flex().id(`machine-${m ?? "local"}`).h(30).flex_none().px(collapsed ? 2 : 8).gap(7).items_center().rounded(7).text_size(11.5).text_color(t.dim)
-        .when(Boolean(offline), el => el.opacity(0.7).tooltip(offline.tooltip))
+        .when(Boolean(view), el => el.tooltip(view.tooltip))
         .cursor_pointer().hover(s => s.bg(t.hover))
         .on_click(() => this.fold(m))
         .when(!collapsed, el => el.ml(-4).child(div().id(`machine-grip-${m ?? "local"}`).flex_none().py(3).rounded(4).cursor_grab().text_color(t.dim)
@@ -478,7 +490,8 @@ export default class Spaces extends View {
           .tooltip("Drag to reorder")
           .on_mouse_down("left", (_e, cx) => { cx.stop_propagation(); this.machinePressed = key; this.machineOver = key; cx.notify(); })
           .child(svg("mods/spaces-plus/grip.svg").size(13))))
-        .child(svg(`mods/workspace-chrome/${m ? "server" : "monitor"}.svg`).size(13).flex_none().text_color(connected ? t.muted : t.dim))
+        .child(div().relative().flex_none().child(svg(`mods/workspace-chrome/${m ? "server" : "monitor"}.svg`).size(13).text_color(connected ? t.muted : t.dim))
+          .when(collapsed && Boolean(m), el => el.child(div().absolute().right(-3).bottom(-2).size(6).rounded(3).border_1().border_color(t.chrome).bg(dotColor))))
         .when(!collapsed, el => el.child(div().flex_shrink(1).min_w(0).truncate().font_semibold().text_color(connected ? t.foreground : t.dim).child(m ?? "This computer"))
           .when(mine.length > 0, el => el.child(div().flex_none().px(5).h(16).rounded(4).bg(t.raised).text_size(10).text_color(t.muted).flex().items_center().child(String(mine.length))))
           .child(div().flex_1())
@@ -493,7 +506,7 @@ export default class Spaces extends View {
               .child(repair?.busy ? "Connecting…" : "Connect"))))
           .when(connected, el => el.child(div().id(`machine-add-${m ?? "local"}`).flex_none().px(4).rounded(4).hover(s => s.bg(t.hover).text_color(t.foreground))
             .on_click((_e, cx) => { cx.stop_propagation(); run("space.new", { machine: m ?? "" }); }).child("+")))
-          .child(div().size(6).rounded(3).flex_none().bg(connected ? t.ansi2 : t.dim))
+          .child(this.machineDot(view, connected, t))
           .child(svg(`mods/workspace-chrome/chevron-${folded ? "right" : "down"}.svg`).size(11).flex_none()));
       const empty = h_flex().id(`machine-new-${m ?? "local"}`).h(28).flex_none().px(8).gap(7).items_center().rounded(7)
         .text_size(12).text_color(t.dim).hover(s => s.bg(t.hover).text_color(t.foreground))
@@ -509,9 +522,137 @@ export default class Spaces extends View {
           .on_click(() => run("space.new", { name: r.name, folder: r.folder, machine: m ?? "" }))
           .child(svg("mods/workspace-chrome/clock.svg").size(12).flex_none().text_color(t.dim))
           .child(div().min_w(0).truncate().child(`${r.name} \u00b7 ${tilde(r.folder)}`)));
-      const status = !collapsed && offline && !rebuilt ? [div().id(`machine-status-${m}`).h(18).flex_none().pl(28).text_size(10.5).text_color(t.dim).tooltip(offline.tooltip).child(offline.text)] : [];
-      return card([head, ...status, ...(folded ? [] : mine.length ? mine.flatMap(draw) : connected ? [loading(m) ? loadingRow(m) : empty, ...again] : [])]);
+      // spaces-plus: reconnecting turns a slow dashed blue ring, unlike an agent's working spinner.
+      const spins = view && (view.kind === "reconnecting" || view.kind === "logging");
+      const icon = view && (view.kind === "reconnecting" ? "mods/spaces-plus/dashed-spinner.svg" : view.kind === "logging" ? "mods/workspace-chrome/spinner.svg" : `mods/spaces-plus/${{ unreachable: "wifi-off", login: "fingerprint", typing: "circle-alert" }[view.kind]}.svg`);
+      const status = !collapsed && view && !rebuilt ? [h_flex().id(`machine-status-${m}`).h(22).flex_none().pl(28).pr(6).gap(6).items_center()
+        .text_size(10.5).text_color(t.muted).tooltip(view.tooltip)
+        .child(spins ? svg(icon).size(11).flex_none().text_color(dotColor).spin(view.kind === "reconnecting" ? 2400 : 900) : svg(icon).size(11).flex_none().text_color(view.kind === "typing" ? t.blocked : dotColor))
+        .child(div().flex_1().min_w(0).truncate().child(view.text))
+        .when(Boolean(view.action), el => el.child(this.connectButton(m, view.action, t)))] : [];
+      const dimmed = (el) => (view ? el.opacity(0.6) : el);
+      return card([head, ...status, ...(folded ? [] : mine.length ? mine.flatMap(draw).map(dimmed) : connected ? [loading(m) ? loadingRow(m) : empty, ...again] : [])]);
     });
+  }
+
+  // spaces-plus: what the card's own logins left behind is dropped once it no longer fits: the
+  // machine is back, its state changed since, the login space was closed, or the machine is gone.
+  afterMachines(cx) {
+    const names = new Set(this.machines.map((x) => x.name));
+    for (const m of Object.keys(this.logins)) if (!names.has(m)) delete this.logins[m];
+    for (const machine of this.machines) {
+      const m = machine.name, login = this.logins[m];
+      const space = spaces().find((w) => !w.machine && w.name === `login ${m}`);
+      if (machine.state === "connected") {
+        if (login && login.phase !== "waiting") delete this.logins[m];
+        if (space) run("space.close", { id: space.id, confirmed: true });
+      } else if (login?.phase === "terminal" && !space && Date.now() - login.at > 10000) delete this.logins[m]; // its space may not show yet
+      else if (login && login.phase !== "waiting" && login.phase !== "terminal" && login.state !== machine.state) delete this.logins[m];
+      if (machine.state === "needs_login") this.refused[m] ??= Date.now();
+      else delete this.refused[m];
+    }
+    this.publishStatus();
+  }
+
+  // What herdr-core says of each machine that isn't connected, for pane-plus's header mark. Only
+  // herdr-core's state, never this card's logins, so every window publishes the same thing.
+  publishStatus() {
+    const status = {};
+    for (const machine of this.machines) {
+      const view = connection(machine, this.offlineSince[machine.name], null);
+      if (view) status[machine.name] = { kind: view.kind, since: machine.since_ms ?? this.offlineSince[machine.name] ?? null };
+    }
+    if (JSON.stringify(status) !== JSON.stringify(shared("machines.status") ?? {})) setShared("machines.status", status);
+  }
+
+  // Nothing stale for pane-plus once this mod is gone.
+  async close() {
+    setShared("machines.status", {});
+  }
+
+  // `hc machine login` logs in, then has herdr-core connect at once. It runs only at a terminal:
+  // login.exp gives it one, checks the network first, and stops at the first prompt a person would
+  // answer. One login per machine at a time: Log in while one still runs, after a Cancel, shows it again.
+  login(m, cx) {
+    if (!SAFE_MACHINE.test(m)) return;
+    if (this.running[m]) {
+      this.logins[m] = { phase: "waiting", tries: this.running[m] };
+      cx.notify();
+      return;
+    }
+    const machine = this.machines.find((x) => x.name === m);
+    const target = !machine?.via && SAFE_MACHINE.test(machine?.target ?? "") ? machine.target : "";
+    const tries = (this.loginTries = (this.loginTries ?? 0) + 1);
+    this.running[m] = tries;
+    this.logins[m] = { phase: "waiting", tries };
+    cx.notify();
+    cx.spawn(async (cx) => {
+      let outcome;
+      try {
+        const r = await exec("expect", [`${appHome()}/mods/spaces-plus/login.exp`, m, target], { timeout: 55000 });
+        outcome = loginOutcome(r.code, `${r.stdout}\n${r.stderr}`);
+      } catch (e) {
+        // Killed at the limit: nothing answered. Otherwise no expect here: a terminal can still log in.
+        outcome = { kind: /tim(e|ed) ?out/i.test(String(e?.message ?? e)) ? "unanswered" : "typing" };
+      }
+      if (this.running[m] === tries) delete this.running[m];
+      if (this.logins[m]?.tries === tries) {
+        const state = this.machines.find((x) => x.name === m)?.state;
+        if (outcome.kind === "ok") delete this.logins[m];
+        else if (outcome.kind === "network") this.logins[m] = { phase: "failed", why: outcome.why, state };
+        else this.logins[m] = { phase: outcome.kind, state };
+      }
+      this.refreshMachines(cx);
+    });
+  }
+
+  // Hides the login; the login itself runs until it ends, at most 55 s.
+  cancelLogin(m, cx) {
+    delete this.logins[m];
+    cx.notify();
+  }
+
+  loginTerminal(m, cx) {
+    if (!SAFE_MACHINE.test(m)) return;
+    this.logins[m] = { phase: "terminal", at: Date.now() };
+    run("space.new", { name: `login ${m}`, machine: "", argv: ["hc", "machine", "login", m], focus: true });
+    cx.notify();
+  }
+
+  closeLoginTerminal(m, cx) {
+    const space = spaces().find((w) => !w.machine && w.name === `login ${m}`);
+    if (space) run("space.close", { id: space.id, confirmed: true });
+    delete this.logins[m];
+    cx.notify();
+  }
+
+  connectButton(m, action, t) {
+    const strong = action === "login" || action === "terminal";
+    return h_flex().id(`machine-${action}-${m}`).flex_none().h(20).px(7).gap(4).items_center().rounded(5).text_size(10.5).cursor_pointer()
+      .when(strong, (el) => el.bg(t.accent).text_color(t.accent_foreground).font_semibold())
+      .when(action === "retry", (el) => el.bg(t.raised).text_color(t.foreground))
+      .when(action === "cancel" || action === "close", (el) => el.text_color(t.muted).hover((st) => st.text_color(t.foreground)))
+      .hover((st) => st.opacity(0.85))
+      .on_click((_e, cx) => {
+        cx.stop_propagation();
+        if (action === "cancel") this.cancelLogin(m, cx);
+        else if (action === "close") this.closeLoginTerminal(m, cx);
+        else if (action === "terminal") this.loginTerminal(m, cx);
+        else this.login(m, cx);
+      })
+      .when(action === "retry", (el) => el.child(svg("mods/spaces-plus/rotate-cw.svg").size(10)))
+      .when(action === "terminal", (el) => el.child(svg("mods/workspace-chrome/terminal.svg").size(10)))
+      .child({ retry: "Retry", login: "Log in", cancel: "Cancel", close: "Close", terminal: "Open terminal" }[action]);
+  }
+
+  // The machine's dot: green when connected, the state's color otherwise; a ring around it when
+  // it waits for a login.
+  machineDot(view, connected, t) {
+    if (!view) return div().size(6).rounded(3).flex_none().bg(connected ? t.ansi2 : t.dim);
+    const color = { reconnecting: t.ansi4, logging: t.accent, unreachable: t.blocked, login: t.accent, typing: t.accent }[view.kind];
+    if (view.kind !== "login" && view.kind !== "typing") return div().size(6).rounded(3).flex_none().bg(color);
+    return div().size(10).rounded(5).flex_none().border_1().border_color(color).flex().items_center().justify_center()
+      .child(div().size(4).rounded(2).bg(color));
   }
 
   fold(m) {

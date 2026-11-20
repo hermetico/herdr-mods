@@ -8,6 +8,10 @@ a version (see [AGENTS.md](AGENTS.md#releases)).
 
 ## [Unreleased]
 
+### Added
+
+- **spaces-plus:** a machine that isn't connected shows what's going on under its header, reconnecting, unreachable or needing a login, with Retry, Log in, or Open terminal for a login that wants typing.
+
 ### Fixed
 
 - **spaces-plus:** showing tabs lists the active space's tabs even when it has only one, so the toggle always shows something.

@@ -140,13 +140,98 @@ export const offlineTimes = (machines, previous, now = Date.now()) => Object.fro
   machines.filter(m => m.state !== "connected").map(m => [m.name, previous[m.name] ?? now]),
 );
 
-export function machineStatus(machine, since, now = Date.now()) {
-  if (machine?.state === "connected") return null;
-  const why = machine?.why || "Not connected";
-  const reason = /host key|remote host identification/i.test(why) ? "host key" : /timed? ?out|timeout/i.test(why) ? "ssh timeout" : /refused/i.test(why) ? "connection refused" : "not connected";
-  const from = machine?.since_ms ?? since;
-  const age = from == null ? "" : duration(Math.max(0, now - from));
-  return { text: `${reason}${age ? ` · ${age}` : ""}`, tooltip: `${why}${age ? `\nNot connected for ${age}${machine?.since_ms == null ? " (observed)" : ""}` : ""}` };
+// A machine name or ssh target that is safe to pass as an argument: no leading "-", so it can't be
+// read as an option.
+export const SAFE_MACHINE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+
+/** How login.exp ended, from its exit code, which it keeps above hc's own: "ok"; "network" when the
+ *  machine's ssh port can't be reached, with the reason as `why`; "denied" when the SSH agent refused
+ *  to sign, such as a Deny in 1Password; "typing" when it asks for a password, a passphrase, a code or
+ *  a sign-in link; "unanswered" after 40 s of nothing, mostly a Touch ID prompt nobody answered. Any
+ *  other failure is hc's own: read from its output, or "network" with its last line. */
+export function loginOutcome(code, out) {
+  const lines = String(out ?? "").split("\n").map((l) => l.trim()).filter((l) => l && !/^spawn /.test(l));
+  if (code === 0) return { kind: "ok" };
+  if (code === 91) return { kind: "denied" };
+  if (code === 92) return { kind: "typing" };
+  if (code === 93) return { kind: "unanswered" };
+  const text = lines.join("\n");
+  if (code !== 90 && /agent refused operation/i.test(text)) return { kind: "denied" };
+  if (code !== 90 && /[Pp]assword:|passphrase for|[Vv]erification code|one-time|authenticate, visit/.test(text)) return { kind: "typing" };
+  const why = lines.find((l) => /^can't reach|^ssh:|could not|timed out|refused|unreachable|no route/i.test(l)) ?? lines.at(-1) ?? "the login failed";
+  return { kind: "network", why: why.replace(/^ssh:\s*/, "").replace(/^error:\s*/, "") };
+}
+
+// Seconds until herdr-core tries a refused login again: 2 minutes after the refusal, 5 more,
+// then every 10. It doesn't report its timer or the refusal's time, so `since` is when the card
+// first saw the machine needing a login.
+export function nextLoginTry(since, now = Date.now()) {
+  const gone = (now - since) / 1000;
+  let at = 120, step = 300;
+  while (at <= gone) { at += step; step = 600; }
+  return Math.max(0, Math.round(at - gone));
+}
+
+const clock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+const age = (ms) => (ms < 60000 ? `${Math.floor(ms / 1000)} s` : duration(ms));
+
+/** What a machine's card says about its connection: `kind` picks the dot and icon, `action` the
+ *  one button. Null when it's connected and no login is under way. A drop shorter than a minute
+ *  is "reconnecting": herdr-core redials on its own then. `login` is the card's own login, if any:
+ *  { phase: "waiting" | "failed" | "denied" | "unanswered" | "typing" | "terminal" }. `refused`: when the card first saw it need a login. */
+export function connection(machine, since, login, name = machine?.name, now = Date.now(), refused = null) {
+  if (login?.phase === "waiting") {
+    return { kind: "logging", text: "logging in…", action: "cancel",
+      tooltip: `Logging in to ${name}: the network first, then the key. If 1Password asks, approve it there.\nIt gives up after 40 s.\nCancel hides it; the login itself still runs until it ends.` };
+  }
+  if (!machine || machine.state === "connected") return null;
+  if (login?.phase === "failed" && machine.state !== "needs_login") {
+    const from = machine.since_ms ?? since ?? now;
+    return { kind: "unreachable", text: `still not reachable · ${age(Math.max(0, now - from))}`, action: "retry",
+      tooltip: `Retry couldn't reach ${name}: ${login.why}\nCheck the VPN or Tailscale, then retry.` };
+  }
+  if (login?.phase === "denied" && machine.state !== "connected") {
+    return { kind: "login", text: "login refused", action: "login",
+      tooltip: `The SSH agent refused to use the key for ${name}: denied in 1Password, or its prompt timed out.\nLog in asks again.` };
+  }
+  if (login?.phase === "unanswered" && machine.state !== "connected") {
+    return { kind: "login", text: "login not answered", action: "login",
+      tooltip: `Nothing answered the login to ${name} in 40 s, mostly a Touch ID prompt left waiting.\nLog in asks again.` };
+  }
+  if (login?.phase === "typing") {
+    return { kind: "typing", text: "login wants typing", action: "terminal",
+      tooltip: `The login to ${name} asks for a password, a code or a sign-in link.\nOpen terminal runs hc machine login ${name} in a new space; it closes once ${name} is back.` };
+  }
+  if (login?.phase === "terminal") {
+    return { kind: "typing", text: "logging in, in a terminal", action: "close",
+      tooltip: `Finish the login in the "login ${name}" space. It closes once ${name} is back.\nClose ends it and closes that space.` };
+  }
+  const from = machine.since_ms ?? since ?? now;
+  const gone = Math.max(0, now - from);
+  const why = machine.why || "";
+  if (machine.state === "needs_login") {
+    return { kind: "login", text: `needs a login · next try ${clock(nextLoginTry(refused ?? now, now))}`, action: "login",
+      tooltip: `${name} refused the SSH login: Touch ID went unanswered, or the key or its agent was locked.\nherdr-core tries again on its own after 2 min, 5 min, then every 10 min.` };
+  }
+  if (machine.state === "connecting" || (machine.state === "unreachable" && gone < 60000)) {
+    return { kind: "reconnecting", text: `reconnecting · ${age(gone)}`, action: null,
+      tooltip: `${why || `Dialing ${name} again`}\nherdr-core retries on its own, every 30 s at most.` };
+  }
+  // herdr-core waits 20 s for the other side's hello. Past the network, that's mostly ssh waiting on
+  // its agent: 1Password asking to use the key.
+  if (machine.state === "unreachable" && /no answer within/i.test(why)) {
+    return { kind: "unreachable", text: `no answer · ${age(gone)}`, action: "retry",
+      tooltip: `${why}\nIt answered too slowly: often an SSH agent such as 1Password still asking to use the key.\nApprove it, or press Retry and approve the new request.` };
+  }
+  if (machine.state === "unreachable") {
+    const reason = /host key|remote host identification/i.test(why) ? "host key"
+      : /refused/i.test(why) ? "connection refused"
+      : /timed? ?out|timeout|unreachable|no route|resolve|nodename|network is down|closed|broken pipe/i.test(why) ? "not reachable"
+      : "not connected";
+    return { kind: "unreachable", text: `${reason} · ${age(gone)}`, action: "retry",
+      tooltip: `${why || "Not connected"}\nNot connected for ${age(gone)}. Retry logs in now instead of waiting for the next try.` };
+  }
+  return { kind: "unreachable", text: machine.state.replace(/_/g, " "), action: null, tooltip: why || machine.state };
 }
 
 /** /proc/stat's first line as [busy, total] jiffies, or null. */

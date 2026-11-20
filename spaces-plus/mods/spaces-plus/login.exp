@@ -1,0 +1,46 @@
+#!/usr/bin/expect -f
+# spaces-plus: logs in to a machine with `hc machine login <name>`, which hc runs only at a
+# terminal, and stops at the first thing a person would have to answer, so the card can say what
+# it was. Usage: login.exp <name> <ssh target>.
+#
+# Exit codes, above hc's own so the two never mix:
+#   0   logged in
+#   90  the machine's ssh port can't be reached within 8 s: not reachable
+#   91  the SSH agent refused to sign, such as a Deny in 1Password
+#   92  it asks for something a person types or opens: a password, a passphrase, a code, a link
+#   93  nothing happened for 40 s: mostly a Touch ID prompt nobody answered
+#   94  hc failed some other way; its output is above
+set name [lindex $argv 0]
+set target [lindex $argv 1]
+
+# The network first, without ssh, so no agent or 1Password is asked. `ssh -G` says where ssh would
+# go without connecting. Skipped behind a proxy, where that isn't the host ssh dials, and off macOS,
+# whose `nc -G` sets the connect timeout.
+if {![catch {exec uname} os] && $os eq "Darwin" && ![catch {exec ssh -G -- $target 2>/dev/null} config]} {
+  set host ""; set port 22; set proxy 0
+  foreach line [split $config "\n"] {
+    lassign [split $line " "] key value
+    switch -- $key {
+      hostname { set host $value }
+      port { set port $value }
+      proxycommand - proxyjump { if {$value ne "none"} { set proxy 1 } }
+    }
+  }
+  if {$host ne "" && !$proxy && [catch {exec nc -z -G 8 $host $port 2>/dev/null}]} {
+    puts "can't reach $host port $port"
+    exit 90
+  }
+}
+
+set timeout 40
+log_user 1
+spawn hc machine login $name
+expect {
+  "agent refused operation" { exit 91 }
+  -re {[Pp]assword:|passphrase for|[Vv]erification code|one-time|authenticate, visit} { exit 92 }
+  timeout { exit 93 }
+  eof {
+    catch wait result
+    exit [expr {[lindex $result 3] == 0 ? 0 : 94}]
+  }
+}

@@ -61,7 +61,10 @@ on herdr.dev (a layout package would need its own copies of the mods); it lives 
   should show only `/home/alex`; look at every new `preview.png` too.
 - **No new dependencies.** Mods use only `herdr`, `gpui-kit`, `gpui-base`. Scripts use POSIX `sh` /
   `bash`, `python3` stdlib, `git`, `rsync`. External tools a feature calls (`gh`, `ss`, `lsof`, `btop`)
-  must be optional: missing means the feature quietly shows nothing.
+  must be optional: missing means the feature quietly shows nothing. One exception degrades instead:
+  spaces-plus logs in to a machine through `expect` (`login.exp`), with `nc` for its network check;
+  without `expect`, Log in offers a terminal running `hc machine login`, and without `nc` the check is
+  skipped.
 
 ## herdr-app facts that bit us
 

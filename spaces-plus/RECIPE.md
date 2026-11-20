@@ -46,8 +46,49 @@ Click opens it on GitHub.
   where it lands, above when moving up, below when moving down. The order is in shared
   `machines.order`. A click elsewhere on the header folds the card. The narrow rail draws no cards.
 - **Machine rows** add the number of spaces, and CPU (`muted`) and memory (`dim`) in use (`12% 45%`, red from 90%) on
-  connected machines. An unreachable machine
-  shows why (`ssh timeout`, `connection refused`, `host key`) and since when, with the full error on hover.
+  connected machines.
+- **A machine that isn't connected** keeps its header the same size: the dot takes the state's color,
+  and one 22px line under the header says what's going on, with at most one button. Its spaces
+  dim to 60%. From `hc machine ls --json`, read every 3 s while a machine is down or a login runs:
+  - **reconnecting**, an `ansi4` blue dot and a slow dashed ring, `dashed-spinner.svg`, so it
+    never looks like an agent working: `connecting`, or `unreachable` for under a
+    minute. herdr-core redials on its own, so there's no button.
+  - **unreachable**, `blocked` dot and `wifi-off.svg`: `not reachable · 4m`, `connection
+    refused` or `host key`, the full error on hover. **Retry** logs in now.
+  - **needs a login**, an `accent` ring and `fingerprint.svg`: `needs a login · next try 1:40`.
+    The next try is counted from herdr-core's waits of 2 min, 5 min, then every 10 min, starting
+    when the card first saw the machine need a login: herdr-core reports neither the timer nor
+    when the login was refused. **Log in** is filled with `accent`.
+  - **logging in…** while a login runs, with **Cancel**, which only hides it. Log in
+    while it still runs shows it again: one login per machine at a time.
+  - **no answer · 3m** when herdr-core gave up after 20 s without a hello: past the network, that's
+    mostly an SSH agent such as 1Password still asking to use the key. Retry asks again.
+  - **still not reachable** after a Retry that couldn't reach the machine, the reason on hover, with
+    Retry again.
+  - **login not answered** after 40 s of nothing, mostly a Touch ID prompt left waiting, with Log in.
+  - **login refused** when the SSH agent refused to sign, `agent refused operation`: a Deny in
+    1Password, or its prompt timing out, which 1Password reports the same way. ssh then falls back to a password, but this is a refusal, so the button is Log in.
+  - **login wants typing** after a login that asked for a password, a passphrase, a code or a
+    sign-in link. **Open terminal** starts a space called `login <machine>` running
+    `hc machine login <machine>`. The card then says **logging in, in a terminal**, with **Close**,
+    which closes that space. The space also closes once the machine is back, and closing it
+    yourself drops the card's line.
+  - A login's result stays only while it fits: it goes once the machine's state changes or the
+    machine is removed.
+- **Logging in:** Retry and Log in run `login.exp`, an `expect` script, with the machine's name and
+  ssh target, as arguments, never through a shell. On macOS it first checks the network without
+  ssh: `ssh -G` for where ssh would go, then `nc -z -G 8` on that port, skipped behind a proxy. So
+  no network fails in 8 s at most, and 1Password is never asked for a machine it can't reach. Then
+  it runs `hc machine login <machine>` at a terminal, which `hc` needs, and stops at the first thing
+  a person would answer: a refusal from the SSH agent, a password, a passphrase, a code or a sign-in
+  link. `hc` logs in, then has herdr-core connect at once, so a working key skips herdr-core's wait.
+  It gives up after 40 s. Its exit codes start at 90, above `hc`'s own. Without `expect`, every
+  login offers Open terminal, which needs nothing more.
+- **The narrow rail** puts the state's dot on the machine icon; a click folds, as on a wide card.
+  Logging in takes a labelled button.
+- **Shared state:** `machines.status` holds `{ kind, since }` per machine that isn't connected, for
+  pane-plus's header mark. Only herdr-core's state goes in, never a card's own logins, so every
+  window writes the same thing. It is emptied when the mod closes.
 - **Recent spaces** (up to 3, clock icon, `name · ~/folder`) under a machine with no spaces; click
   reopens one with `space.new`.
 
@@ -67,14 +108,18 @@ a rail nothing is polled: the rail shows none of it.
 
 **Built from:** a copy of the shipped `spaces` mod (herdr-app 0.1.12). Its own helpers are in
 `extras.mjs` (pure: `tilde`, `tabLabel`, `changedCount`, `PORTS_SCRIPT`, `parseListeners`,
-`assignPorts`, `portUrl`, `isWsl`, `prsByBranch`, CPU/memory parsing). Uses `exec("sh", ["-c", PORTS_SCRIPT], { on })`,
+`assignPorts`, `portUrl`, `isWsl`, `prsByBranch`, CPU/memory parsing, `connection`, `nextLoginTry`). Uses `exec("sh", ["-c", PORTS_SCRIPT], { on })`,
 `exec("gh", …)`, `cx.open_url(url)` in the click handlers, `window()?.platform`, `readTextFile("/proc/…", { on })`,
 `spaces()`, `machines()`, `panes()` (tab titles, agent names), `exec("git", ["status", "--porcelain=v2", "--branch"])`,
 `readTextFile(appHome() + "/view.json")` for `recent` (no herdr function returns it), `run("tab.select")`,
-`run("space.new")`, and icons from the shipped `workspace-chrome` mod (`spinner.svg`, `clock.svg`,
+`run("space.new")`, `run("space.close")`, `exec("expect", ["…/login.exp", machine])` and `hc(["machine", "ls", "--json"])` for logins, and icons from the shipped `workspace-chrome` mod (`spinner.svg`, `clock.svg`,
 `chevron-right.svg`, `chevron-down.svg`).
 
 **Watch out:**
+- A login's Cancel only hides it: the login itself runs until it ends, 48 s at most, and `exec`
+  kills it at 55 s.
+- The "next try" time is an estimate, counted from when the card first saw the refusal.
+- Each window's card runs its own logins, so two windows can each log in to the same machine.
 - `recent` entries may have no `machine` field; those are treated as this computer's.
 - Herdr keeps closed spaces in `recent` and has no command to drop one.
 - The git count runs `git status` per space; a huge repo makes the line appear a moment later.
