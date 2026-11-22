@@ -10,6 +10,8 @@
 #   92  it asks for something a person types or opens: a password, a passphrase, a code, a link
 #   93  nothing happened for 40 s: mostly a Touch ID prompt nobody answered
 #   94  hc failed some other way; its output is above
+#   95  Tailscale SSH wants a login in the browser; the link is the last line
+#   96  the SSH agent ssh would use isn't running, such as 1Password quit
 set name [lindex $argv 0]
 set target [lindex $argv 1]
 
@@ -17,18 +19,28 @@ set target [lindex $argv 1]
 # go without connecting. Skipped behind a proxy, where that isn't the host ssh dials, and off macOS,
 # whose `nc -G` sets the connect timeout.
 if {![catch {exec uname} os] && $os eq "Darwin" && ![catch {exec ssh -G -- $target 2>/dev/null} config]} {
-  set host ""; set port 22; set proxy 0
+  set host ""; set port 22; set proxy 0; set agent ""
   foreach line [split $config "\n"] {
-    lassign [split $line " "] key value
+    set key [lindex [split $line " "] 0]
+    set value [string range $line [expr {[string length $key] + 1}] end]
     switch -- $key {
       hostname { set host $value }
       port { set port $value }
       proxycommand - proxyjump { if {$value ne "none"} { set proxy 1 } }
+      identityagent { set agent [regsub {^~/} $value "$::env(HOME)/"] }
     }
   }
   if {$host ne "" && !$proxy && [catch {exec nc -z -G 8 $host $port 2>/dev/null}]} {
     puts "can't reach $host port $port"
     exit 90
+  }
+  # The agent next: listing its keys needs no approval, and ssh-add exits 2 when nothing answers
+  # at the socket, as when 1Password is quit.
+  if {$agent ne "" && $agent ne "none" && $agent ne "SSH_AUTH_SOCK"} {
+    if {[catch {exec env SSH_AUTH_SOCK=$agent ssh-add -l >/dev/null 2>/dev/null} err opts] && [lindex [dict get $opts -errorcode] 0] eq "CHILDSTATUS" && [lindex [dict get $opts -errorcode] 2] == 2} {
+      puts "no SSH agent at $agent"
+      exit 96
+    }
   }
 }
 
@@ -37,7 +49,8 @@ log_user 1
 spawn hc machine login $name
 expect {
   "agent refused operation" { exit 91 }
-  -re {[Pp]assword:|passphrase for|[Vv]erification code|one-time|authenticate, visit} { exit 92 }
+  -re {authenticate, visit:\s*(https://[^\s]+)\s} { puts "\n$expect_out(1,string)"; exit 95 }
+  -re {[Pp]assword:|passphrase for|[Vv]erification code|one-time} { exit 92 }
   timeout { exit 93 }
   eof {
     catch wait result

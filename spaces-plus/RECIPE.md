@@ -68,8 +68,15 @@ Click opens it on GitHub.
   - **login not answered** after 40 s of nothing, mostly a Touch ID prompt left waiting, with Log in.
   - **login refused** when the SSH agent refused to sign, `agent refused operation`: a Deny in
     1Password, or its prompt timing out, which 1Password reports the same way. ssh then falls back to a password, but this is a refusal, so the button is Log in.
-  - **login wants typing** after a login that asked for a password, a passphrase, a code or a
-    sign-in link. **Open terminal** starts a space called `login <machine>` running
+  - **Tailscale needs login** when Tailscale SSH, in its check mode, wants a fresh login in the
+    browser: `To authenticate, visit: <link>`. herdr-core sees only `no answer within 20 s`, since
+    the server holds the connection until someone logs in. **Open link** opens that `https` link;
+    the machine reconnects on its own once Tailscale lets it in.
+  - **1Password closed** when the SSH agent ssh uses for the machine, its `IdentityAgent`, doesn't
+    answer and its path names 1Password. **Open** starts 1Password; then Log in. Another agent
+    says **SSH agent not running**, with Log in.
+  - **login wants typing** after a login that asked for a password, a passphrase or a code.
+    **Open terminal** starts a space called `login <machine>` running
     `hc machine login <machine>`. The card then says **logging in, in a terminal**, with **Close**,
     which closes that space. The space also closes once the machine is back, and closing it
     yourself drops the card's line.
@@ -78,10 +85,12 @@ Click opens it on GitHub.
 - **Logging in:** Retry and Log in run `login.exp`, an `expect` script, with the machine's name and
   ssh target, as arguments, never through a shell. On macOS it first checks the network without
   ssh: `ssh -G` for where ssh would go, then `nc -z -G 8` on that port, skipped behind a proxy. So
-  no network fails in 8 s at most, and 1Password is never asked for a machine it can't reach. Then
+  no network fails in 8 s at most, and 1Password is never asked for a machine it can't reach. Next
+  `ssh-add -l` against that `IdentityAgent`, which lists keys without asking for approval: exit 2
+  means nothing answers there. Then
   it runs `hc machine login <machine>` at a terminal, which `hc` needs, and stops at the first thing
-  a person would answer: a refusal from the SSH agent, a password, a passphrase, a code or a sign-in
-  link. `hc` logs in, then has herdr-core connect at once, so a working key skips herdr-core's wait.
+  a person would answer: a refusal from the SSH agent, a Tailscale login link, a password, a
+  passphrase or a code. `hc` logs in, then has herdr-core connect at once, so a working key skips herdr-core's wait.
   It gives up after 40 s. Its exit codes start at 90, above `hc`'s own. Without `expect`, every
   login offers Open terminal, which needs nothing more.
 - **The narrow rail** puts the state's dot on the machine icon; a click folds, as on a wide card.

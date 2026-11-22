@@ -165,7 +165,15 @@ assert.deepEqual(moveMachine(["", "alpha"], "alpha", "alpha"), ["", "alpha"]);
   assert.deepEqual(loginOutcome(94, "spawn hc machine login box\nssh: Could not resolve hostname box: nodename nor servname provided, or not known\nerror: logging in to box failed\nhint: ssh said why, above"),
     { kind: "network", why: "Could not resolve hostname box: nodename nor servname provided, or not known" });
   assert.equal(loginOutcome(94, "alex@box's password: \nPermission denied (publickey,password).").kind, "typing");
-  assert.equal(loginOutcome(94, "# To authenticate, visit: https://login.tailscale.com/a/abc").kind, "typing");
+  assert.deepEqual(loginOutcome(94, "# To authenticate, visit: https://login.tailscale.com/a/abc"), { kind: "tailscale", url: "https://login.tailscale.com/a/abc" });
+  assert.deepEqual(loginOutcome(95, "spawn hc machine login box\n# Tailscale SSH requires an additional check.\n# To authenticate, visit: https://login.tailscale.com/a/abc\n\nhttps://login.tailscale.com/a/abc"), { kind: "tailscale", url: "https://login.tailscale.com/a/abc" });
+  assert.deepEqual(loginOutcome(95, "nothing useful"), { kind: "typing" });
+  assert.deepEqual(loginOutcome(96, "no SSH agent at /home/alex/.1password/agent.sock"), { kind: "agent", onePassword: true });
+  assert.deepEqual(loginOutcome(96, "no SSH agent at /tmp/ssh-x/agent.1"), { kind: "agent", onePassword: false });
+  const ts = connection({ name: "box", state: "unreachable" }, null, { phase: "tailscale", url: "https://login.tailscale.com/a/abc" }, "box");
+  assert.equal(ts.text, "Tailscale needs login"); assert.equal(ts.action, "link");
+  assert.equal(connection({ name: "box", state: "needs_login" }, null, { phase: "agent", onePassword: true }, "box").text, "1Password closed");
+  assert.equal(connection({ name: "box", state: "needs_login" }, null, { phase: "agent", onePassword: false }, "box").action, "login");
   // A banner naming 1Password or a URL is not a prompt.
   assert.equal(loginOutcome(94, "Welcome! Keys live in 1Password, see https://wiki.example.com\nerror: logging in to box failed").kind, "network");
   // hc's own exit codes 3, 4 and 5 are failures, not the script's results.

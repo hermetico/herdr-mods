@@ -62,9 +62,9 @@ on herdr.dev (a layout package would need its own copies of the mods); it lives 
 - **No new dependencies.** Mods use only `herdr`, `gpui-kit`, `gpui-base`. Scripts use POSIX `sh` /
   `bash`, `python3` stdlib, `git`, `rsync`. External tools a feature calls (`gh`, `ss`, `lsof`, `btop`)
   must be optional: missing means the feature quietly shows nothing. One exception degrades instead:
-  spaces-plus logs in to a machine through `expect` (`login.exp`), with `nc` for its network check;
-  without `expect`, Log in offers a terminal running `hc machine login`, and without `nc` the check is
-  skipped.
+  spaces-plus logs in to a machine through `expect` (`login.exp`), with `nc` for its network check
+  and `ssh-add` for its agent check; without `expect`, Log in offers a terminal running
+  `hc machine login`, and without `nc` or `ssh-add` that check is skipped.
 
 ## herdr-app facts that bit us
 

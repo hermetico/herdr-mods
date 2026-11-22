@@ -147,8 +147,10 @@ export const SAFE_MACHINE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
 /** How login.exp ended, from its exit code, which it keeps above hc's own: "ok"; "network" when the
  *  machine's ssh port can't be reached, with the reason as `why`; "denied" when the SSH agent refused
  *  to sign, such as a Deny in 1Password; "typing" when it asks for a password, a passphrase, a code or
- *  a sign-in link; "unanswered" after 40 s of nothing, mostly a Touch ID prompt nobody answered. Any
- *  other failure is hc's own: read from its output, or "network" with its last line. */
+ *  a sign-in link; "unanswered" after 40 s of nothing, mostly a Touch ID prompt nobody answered;
+ *  "tailscale" when Tailscale SSH wants a login in the browser, with its link as `url`; "agent" when the
+ *  SSH agent isn't running, with `onePassword` when it's 1Password's. Any other failure is hc's own:
+ *  read from its output, or "network" with its last line. */
 export function loginOutcome(code, out) {
   const lines = String(out ?? "").split("\n").map((l) => l.trim()).filter((l) => l && !/^spawn /.test(l));
   if (code === 0) return { kind: "ok" };
@@ -156,8 +158,12 @@ export function loginOutcome(code, out) {
   if (code === 92) return { kind: "typing" };
   if (code === 93) return { kind: "unanswered" };
   const text = lines.join("\n");
+  const url = text.match(/authenticate, visit:\s*(https:\/\/\S+)/)?.[1] ?? (code === 95 ? lines.findLast((l) => /^https:\/\/\S+$/.test(l)) : null);
+  if (url && code !== 90) return { kind: "tailscale", url };
+  if (code === 95) return { kind: "typing" };
+  if (code === 96) return { kind: "agent", onePassword: /1password/i.test(text) };
   if (code !== 90 && /agent refused operation/i.test(text)) return { kind: "denied" };
-  if (code !== 90 && /[Pp]assword:|passphrase for|[Vv]erification code|one-time|authenticate, visit/.test(text)) return { kind: "typing" };
+  if (code !== 90 && /[Pp]assword:|passphrase for|[Vv]erification code|one-time/.test(text)) return { kind: "typing" };
   const why = lines.find((l) => /^can't reach|^ssh:|could not|timed out|refused|unreachable|no route/i.test(l)) ?? lines.at(-1) ?? "the login failed";
   return { kind: "network", why: why.replace(/^ssh:\s*/, "").replace(/^error:\s*/, "") };
 }
@@ -178,7 +184,7 @@ const age = (ms) => (ms < 60000 ? `${Math.floor(ms / 1000)} s` : duration(ms));
 /** What a machine's card says about its connection: `kind` picks the dot and icon, `action` the
  *  one button. Null when it's connected and no login is under way. A drop shorter than a minute
  *  is "reconnecting": herdr-core redials on its own then. `login` is the card's own login, if any:
- *  { phase: "waiting" | "failed" | "denied" | "unanswered" | "typing" | "terminal" }. `refused`: when the card first saw it need a login. */
+ *  { phase: "waiting" | "failed" | "denied" | "unanswered" | "typing" | "terminal" | "tailscale" | "agent" }. `refused`: when the card first saw it need a login. */
 export function connection(machine, since, login, name = machine?.name, now = Date.now(), refused = null) {
   if (login?.phase === "waiting") {
     return { kind: "logging", text: "logging in…", action: "cancel",
@@ -197,6 +203,17 @@ export function connection(machine, since, login, name = machine?.name, now = Da
   if (login?.phase === "unanswered" && machine.state !== "connected") {
     return { kind: "login", text: "login not answered", action: "login",
       tooltip: `Nothing answered the login to ${name} in 40 s, mostly a Touch ID prompt left waiting.\nLog in asks again.` };
+  }
+  if (login?.phase === "tailscale" && login.url) {
+    return { kind: "login", text: "Tailscale needs login", action: "link",
+      tooltip: `Tailscale SSH wants you to log in again in the browser.\nOpen link opens it; ${name} reconnects on its own once you're in.` };
+  }
+  if (login?.phase === "agent") {
+    return login.onePassword
+      ? { kind: "login", text: "1Password closed", action: "open1p",
+          tooltip: `ssh uses 1Password's SSH agent for ${name}, and 1Password isn't running.\nOpen starts it; then Log in.` }
+      : { kind: "login", text: "SSH agent not running", action: "login",
+          tooltip: `The SSH agent ssh uses for ${name} isn't answering.\nStart it, then Log in.` };
   }
   if (login?.phase === "typing") {
     return { kind: "typing", text: "login wants typing", action: "terminal",

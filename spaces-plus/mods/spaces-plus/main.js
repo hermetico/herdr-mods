@@ -600,7 +600,7 @@ export default class Spaces extends View {
         const state = this.machines.find((x) => x.name === m)?.state;
         if (outcome.kind === "ok") delete this.logins[m];
         else if (outcome.kind === "network") this.logins[m] = { phase: "failed", why: outcome.why, state };
-        else this.logins[m] = { phase: outcome.kind, state };
+        else this.logins[m] = { phase: outcome.kind, url: outcome.url, onePassword: outcome.onePassword, state };
       }
       this.refreshMachines(cx);
     });
@@ -627,7 +627,7 @@ export default class Spaces extends View {
   }
 
   connectButton(m, action, t) {
-    const strong = action === "login" || action === "terminal";
+    const strong = action === "login" || action === "terminal" || action === "link" || action === "open1p";
     return h_flex().id(`machine-${action}-${m}`).flex_none().h(20).px(7).gap(4).items_center().rounded(5).text_size(10.5).cursor_pointer()
       .when(strong, (el) => el.bg(t.accent).text_color(t.accent_foreground).font_semibold())
       .when(action === "retry", (el) => el.bg(t.raised).text_color(t.foreground))
@@ -638,11 +638,14 @@ export default class Spaces extends View {
         if (action === "cancel") this.cancelLogin(m, cx);
         else if (action === "close") this.closeLoginTerminal(m, cx);
         else if (action === "terminal") this.loginTerminal(m, cx);
+        else if (action === "link") { const url = this.logins[m]?.url; if (/^https:\/\/\S+$/.test(url ?? "")) cx.open_url(url); }
+        else if (action === "open1p") cx.spawn(async (cx) => { await exec("open", ["-a", "1Password"]).catch(() => null); delete this.logins[m]; cx.notify(); });
         else this.login(m, cx);
       })
       .when(action === "retry", (el) => el.child(svg("mods/spaces-plus/rotate-cw.svg").size(10)))
       .when(action === "terminal", (el) => el.child(svg("mods/workspace-chrome/terminal.svg").size(10)))
-      .child({ retry: "Retry", login: "Log in", cancel: "Cancel", close: "Close", terminal: "Open terminal" }[action]);
+      .when(action === "link", (el) => el.child(svg("mods/spaces-plus/external-link.svg").size(10)))
+      .child({ retry: "Retry", login: "Log in", cancel: "Cancel", close: "Close", terminal: "Open terminal", link: "Open link", open1p: "Open" }[action]);
   }
 
   // The machine's dot: green when connected, the state's color otherwise; a ring around it when
