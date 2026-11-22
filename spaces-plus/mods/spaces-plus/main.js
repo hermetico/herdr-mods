@@ -477,7 +477,7 @@ export default class Spaces extends View {
       const rebuilt = this.rebuilt(machine) || !!repair;
       // spaces-plus: the connection's state, and the one thing to do about it.
       const view = m && !this.rebuilt(machine) ? connection(machine, this.offlineSince[m], this.logins[m], m, Date.now(), this.refused[m]) : null;
-      const dotColor = !view ? (connected ? t.ansi2 : t.dim) : { reconnecting: t.ansi4, logging: t.accent, unreachable: t.blocked, login: t.accent, typing: t.accent }[view.kind];
+      const dotColor = !view ? (connected ? t.ansi2 : t.dim) : { reconnecting: t.ansi4, logging: t.accent, unreachable: t.blocked, login: t.accent, typing: t.accent, agent: t.accent }[view.kind];
       const folded = this.folded.has(m);
       // spaces-plus: a press on the header starts a drag; released on the same card it folds it.
       const key = m ?? "";
@@ -524,7 +524,7 @@ export default class Spaces extends View {
           .child(div().min_w(0).truncate().child(`${r.name} \u00b7 ${tilde(r.folder)}`)));
       // spaces-plus: reconnecting turns a slow dashed blue ring, unlike an agent's working spinner.
       const spins = view && (view.kind === "reconnecting" || view.kind === "logging");
-      const icon = view && (view.kind === "reconnecting" ? "mods/spaces-plus/dashed-spinner.svg" : view.kind === "logging" ? "mods/workspace-chrome/spinner.svg" : `mods/spaces-plus/${{ unreachable: "wifi-off", login: "fingerprint", typing: "circle-alert" }[view.kind]}.svg`);
+      const icon = view && (view.kind === "reconnecting" ? "mods/spaces-plus/dashed-spinner.svg" : view.kind === "logging" ? "mods/workspace-chrome/spinner.svg" : `mods/spaces-plus/${{ unreachable: "wifi-off", login: "fingerprint", typing: "circle-alert", agent: "power" }[view.kind]}.svg`);
       const status = !collapsed && view && !rebuilt ? [h_flex().id(`machine-status-${m}`).h(22).flex_none().pl(28).pr(6).gap(6).items_center()
         .text_size(10.5).text_color(t.muted).tooltip(view.tooltip)
         .child(spins ? svg(icon).size(11).flex_none().text_color(dotColor).spin(view.kind === "reconnecting" ? 2400 : 900) : svg(icon).size(11).flex_none().text_color(view.kind === "typing" ? t.blocked : dotColor))
@@ -652,8 +652,8 @@ export default class Spaces extends View {
   // it waits for a login.
   machineDot(view, connected, t) {
     if (!view) return div().size(6).rounded(3).flex_none().bg(connected ? t.ansi2 : t.dim);
-    const color = { reconnecting: t.ansi4, logging: t.accent, unreachable: t.blocked, login: t.accent, typing: t.accent }[view.kind];
-    if (view.kind !== "login" && view.kind !== "typing") return div().size(6).rounded(3).flex_none().bg(color);
+    const color = { reconnecting: t.ansi4, logging: t.accent, unreachable: t.blocked, login: t.accent, typing: t.accent, agent: t.accent }[view.kind];
+    if (view.kind !== "login" && view.kind !== "typing" && view.kind !== "agent") return div().size(6).rounded(3).flex_none().bg(color);
     return div().size(10).rounded(5).flex_none().border_1().border_color(color).flex().items_center().justify_center()
       .child(div().size(4).rounded(2).bg(color));
   }

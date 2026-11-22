@@ -172,7 +172,7 @@ assert.deepEqual(moveMachine(["", "alpha"], "alpha", "alpha"), ["", "alpha"]);
   assert.deepEqual(loginOutcome(96, "no SSH agent at /tmp/ssh-x/agent.1"), { kind: "agent", onePassword: false });
   const ts = connection({ name: "box", state: "unreachable" }, null, { phase: "tailscale", url: "https://login.tailscale.com/a/abc" }, "box");
   assert.equal(ts.text, "Tailscale needs login"); assert.equal(ts.action, "link");
-  assert.equal(connection({ name: "box", state: "needs_login" }, null, { phase: "agent", onePassword: true }, "box").text, "1Password closed");
+  assert.equal(connection({ name: "box", state: "needs_login" }, null, { phase: "agent", onePassword: true }, "box").text, "1Password not running");
   assert.equal(connection({ name: "box", state: "needs_login" }, null, { phase: "agent", onePassword: false }, "box").action, "login");
   // A banner naming 1Password or a URL is not a prompt.
   assert.equal(loginOutcome(94, "Welcome! Keys live in 1Password, see https://wiki.example.com\nerror: logging in to box failed").kind, "network");

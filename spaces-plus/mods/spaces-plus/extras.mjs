@@ -149,7 +149,7 @@ export const SAFE_MACHINE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
  *  to sign, such as a Deny in 1Password; "typing" when it asks for a password, a passphrase, a code or
  *  a sign-in link; "unanswered" after 40 s of nothing, mostly a Touch ID prompt nobody answered;
  *  "tailscale" when Tailscale SSH wants a login in the browser, with its link as `url`; "agent" when the
- *  SSH agent isn't running, with `onePassword` when it's 1Password's. Any other failure is hc's own:
+ *  login failed and the SSH agent isn't running, with `onePassword` when it's 1Password's. Any other failure is hc's own:
  *  read from its output, or "network" with its last line. */
 export function loginOutcome(code, out) {
   const lines = String(out ?? "").split("\n").map((l) => l.trim()).filter((l) => l && !/^spawn /.test(l));
@@ -210,10 +210,10 @@ export function connection(machine, since, login, name = machine?.name, now = Da
   }
   if (login?.phase === "agent") {
     return login.onePassword
-      ? { kind: "login", text: "1Password closed", action: "open1p",
-          tooltip: `ssh uses 1Password's SSH agent for ${name}, and 1Password isn't running.\nOpen starts it; then Log in.` }
-      : { kind: "login", text: "SSH agent not running", action: "login",
-          tooltip: `The SSH agent ssh uses for ${name} isn't answering.\nStart it, then Log in.` };
+      ? { kind: "agent", text: "1Password not running", action: "open1p",
+          tooltip: `The login to ${name} failed, and 1Password, whose SSH agent ssh uses for it, isn't running.\nOpen starts it; ${name} reconnects on its own once it's up, or press Log in.` }
+      : { kind: "agent", text: "SSH agent not running", action: "login",
+          tooltip: `The login to ${name} failed, and the SSH agent ssh uses for it isn't answering.\nStart it, then Log in.` };
   }
   if (login?.phase === "typing") {
     return { kind: "typing", text: "login wants typing", action: "terminal",

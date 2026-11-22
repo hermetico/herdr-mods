@@ -72,9 +72,10 @@ Click opens it on GitHub.
     browser: `To authenticate, visit: <link>`. herdr-core sees only `no answer within 20 s`, since
     the server holds the connection until someone logs in. **Open link** opens that `https` link;
     the machine reconnects on its own once Tailscale lets it in.
-  - **1Password closed** when the SSH agent ssh uses for the machine, its `IdentityAgent`, doesn't
-    answer and its path names 1Password. **Open** starts 1Password; then Log in. Another agent
-    says **SSH agent not running**, with Log in.
+  - **1Password not running** when the login failed and the SSH agent ssh uses for the machine,
+    its `IdentityAgent`, doesn't answer, with a path that names 1Password. **Open** starts
+    1Password. Another agent says **SSH agent not running**, with Log in. A missing agent alone
+    isn't a failure: ssh then tries the machine's key files, and a key without a passphrase logs in.
   - **login wants typing** after a login that asked for a password, a passphrase or a code.
     **Open terminal** starts a space called `login <machine>` running
     `hc machine login <machine>`. The card then says **logging in, in a terminal**, with **Close**,
@@ -87,7 +88,7 @@ Click opens it on GitHub.
   ssh: `ssh -G` for where ssh would go, then `nc -z -G 8` on that port, skipped behind a proxy. So
   no network fails in 8 s at most, and 1Password is never asked for a machine it can't reach. Next
   `ssh-add -l` against that `IdentityAgent`, which lists keys without asking for approval: exit 2
-  means nothing answers there. Then
+  means nothing answers there, which names the cause if the login then fails. Then
   it runs `hc machine login <machine>` at a terminal, which `hc` needs, and stops at the first thing
   a person would answer: a refusal from the SSH agent, a Tailscale login link, a password, a
   passphrase or a code. `hc` logs in, then has herdr-core connect at once, so a working key skips herdr-core's wait.

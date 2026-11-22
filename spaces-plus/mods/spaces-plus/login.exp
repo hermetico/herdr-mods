@@ -11,7 +11,7 @@
 #   93  nothing happened for 40 s: mostly a Touch ID prompt nobody answered
 #   94  hc failed some other way; its output is above
 #   95  Tailscale SSH wants a login in the browser; the link is the last line
-#   96  the SSH agent ssh would use isn't running, such as 1Password quit
+#   96  the login failed and the SSH agent ssh would use isn't running, such as 1Password quit
 set name [lindex $argv 0]
 set target [lindex $argv 1]
 
@@ -35,13 +35,17 @@ if {![catch {exec uname} os] && $os eq "Darwin" && ![catch {exec ssh -G -- $targ
     exit 90
   }
   # The agent next: listing its keys needs no approval, and ssh-add exits 2 when nothing answers
-  # at the socket, as when 1Password is quit.
+  # at the socket, as when 1Password is quit. Only noted: ssh can still log in with a key file, so
+  # a missing agent is the reason only once the login fails.
   if {$agent ne "" && $agent ne "none" && $agent ne "SSH_AUTH_SOCK"} {
     if {[catch {exec env SSH_AUTH_SOCK=$agent ssh-add -l >/dev/null 2>/dev/null} err opts] && [lindex [dict get $opts -errorcode] 0] eq "CHILDSTATUS" && [lindex [dict get $opts -errorcode] 2] == 2} {
-      puts "no SSH agent at $agent"
-      exit 96
+      set noagent $agent
     }
   }
+}
+proc failed {code} {
+  if {[info exists ::noagent]} { puts "\nno SSH agent at $::noagent"; exit 96 }
+  exit $code
 }
 
 set timeout 40
@@ -50,10 +54,11 @@ spawn hc machine login $name
 expect {
   "agent refused operation" { exit 91 }
   -re {authenticate, visit:\s*(https://[^\s]+)\s} { puts "\n$expect_out(1,string)"; exit 95 }
-  -re {[Pp]assword:|passphrase for|[Vv]erification code|one-time} { exit 92 }
+  -re {[Pp]assword:|passphrase for|[Vv]erification code|one-time} { failed 92 }
   timeout { exit 93 }
   eof {
     catch wait result
-    exit [expr {[lindex $result 3] == 0 ? 0 : 94}]
+    if {[lindex $result 3] == 0} { exit 0 }
+    failed 94
   }
 }
