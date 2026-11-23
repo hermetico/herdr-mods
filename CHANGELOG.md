@@ -30,6 +30,7 @@ a version (see [AGENTS.md](AGENTS.md#releases)).
 
 ### Changed
 
+- **agents-ids, spaces-plus:** merged Herdr's agents and spaces mods from herdr-app 0.1.17. agents-ids: a kept sub-agent shows its own done and focuses its pane, a helper's done no longer pulls its parent out of Working, the rail marks the agent you're on, and a viewed done agent now leaves Done at once, as in Herdr. spaces-plus: the list scrolls to the active space, git is read from refs plus one status for the changed count, a `project/.bare` repo is named after the project, and a machine whose agents stop on logout shows a ⚠.
 - **agents-ids, sysstat:** an agent or stats bar on another machine shows that machine's Spaces icon instead of its name, so an agent's title isn't cut short; hover the agent's icon (or open the stats card) for the name.
 - **spaces-plus:** a space shows one dot per agent in it, colored by status, instead of its letter avatar; the spinner and done dot on the right are gone, `Needs you` stays.
 - **spaces-plus:** each machine is a card holding its spaces, with the machine's name in bold, its space count in a small badge, and no "connected" word, since the green dot says it.

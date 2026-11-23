@@ -4,7 +4,7 @@
 // integrations/ in github.com/DarkoKuzmanovic/herdr-mods, or by any agent: `hc label $HC_TERMINAL_ID agent.session=<id>`).
 // Ctrl-click the line: copy the session id; Shift-click: copy the address. Below the agents, "Recent
 // sessions": agents that ended in a terminal, with Resume. Merge `agents` updates via the repo's upstream branch.
-// A viewed done agent stays in Done until left. "Save & close sessions" (agents-ids.unload) saves every agent's
+// "Save & close sessions" (agents-ids.unload) saves every agent's
 // session to a snapshot file and closes the tabs safe to close; "Reopen" (agents-ids.load) brings them back.
 
 import { View, div, image, svg } from "gpui-kit";
@@ -50,17 +50,29 @@ function toggleSidebar() {
   run("layout.resize", { id: "sidebar", px: narrow() ? (shared("sidebar.width") ?? 268) : window()?.platform === "macos" ? 76 : 44 });
 }
 
-const clean = (s) => (s ?? "").replace(/^[^\p{L}\p{N}]+/u, "").trim();
+// Drops what an agent puts before its title: a status glyph or spinner and the separator
+// after it ("✦  Working", "⠋ - Thinking"), and Codex's blinking "[ ! ] " / "[ . ] " mark.
+// Stops at an opening bracket or quote, so a title that starts with one ("[web] login") keeps it,
+// and at an emoji ("🔴 login", "❤️ deploy"), except for known status marks.
+const clean = (s) => (s ?? "").replace(/^(?:\[ [!.] \] |[✋⏳]\uFE0F?(?=\s)|(?!(?:\p{Emoji}\uFE0F|[#*]\u20E3))[^\p{L}\p{N}\p{Ps}\p{Pi}\p{Emoji_Presentation}])+/u, "").trim();
 
-function lead(tab, all = panes()) {
-  const mine = all.filter(p => p.tab === tab.id && p.terminal);
-  return mine.find(p => p.program?.agent) ?? mine.find(p => p.focused) ?? mine[0];
+function leadPanes(all) {
+  const leads = new Map();
+  for (const p of all) {
+    if (!p.terminal) continue;
+    const current = leads.get(p.tab);
+    // First agent, else first focused terminal, else first terminal in the tab.
+    if (!current || (!current.program?.agent && (p.program?.agent || (!current.focused && p.focused)))) leads.set(p.tab, p);
+  }
+  return leads;
 }
 
 function title(tab, l) {
   const prog = l?.program?.name;
   const live = clean(l?.title);
-  const telling = live && live !== prog && !/^[~/]|^[A-Za-z]:\\/.test(live) && !live.includes("@") && live.toLowerCase() !== l?.program?.key;
+  // clean() would strip a path's leading ~ or /: test the title with only its status glyph gone.
+  const path = /^[~/]|^[A-Za-z]:\\/.test((l?.title ?? "").replace(/^[^\p{L}\p{N}~/]+/u, ""));
+  const telling = live && live !== (l?.terminal ?? l?.address) && live !== prog && !path && !live.includes("@") && live.toLowerCase() !== l?.program?.key;
   return (tab.name === prog || !tab.named) && telling ? live : tab.name;
 }
 // agents-ids: "asks" (a finished agent's Next line asks for you) sits with Needs you; "waiting" (background
@@ -68,8 +80,10 @@ function title(tab, l) {
 const RANK = { blocked: 4, asks: 4, done: 3, working: 2, waiting: 1.5, idle: 1 };
 // A sub-agent without a pane isn't in agents(): its raw word, error counting as
 // blocked. It's never done: it reports to its parent, and the parent's done is the news.
+// A kept sub-agent (one with a pane) is in agents() too: it keeps its own status, done included.
 const kidStatus = (k, listed) => {
-  const s = listed.get(k.address) ?? k.status;
+  if (listed.has(k.address)) return listed.get(k.address);
+  const s = k.status;
   return s === "error" ? "blocked" : s === "done" ? "idle" : s;
 };
 const SORTS = [
@@ -123,8 +137,10 @@ export default class Agents extends View {
     this.repos = new Map();
     this.names = new Map(); // agents-ids: sid -> session name from the agent's own history, "" when it has none
     // Each agent's last state and when it changed (ms), kept across restarts.
-    this.changed = JSON.parse(localStorage.getItem("changed") ?? "{}");
-    this.pendingPins = JSON.parse(localStorage.getItem("pins") ?? "[]");
+    try { this.changed = JSON.parse(localStorage.getItem("changed") ?? "{}"); } catch { this.changed = {}; }
+    if (!this.changed || typeof this.changed !== "object" || Array.isArray(this.changed)) this.changed = {};
+    try { this.pendingPins = JSON.parse(localStorage.getItem("pins") ?? "[]"); } catch { this.pendingPins = []; }
+    if (!Array.isArray(this.pendingPins)) this.pendingPins = [];
     if (!this.pendingPins.length) localStorage.removeItem("pins");
     this.migratingPins = new Set();
     // Agent sessions seen in a terminal (sid -> where, when), for Recent sessions.
@@ -204,15 +220,6 @@ export default class Agents extends View {
     return this.changed[a.address]?.at ?? 0;
   }
 
-  // Looking at a done agent makes it idle; it stays with Done until you leave
-  // it rather than drop away under you. Any other change moves it at once.
-  hold(list) {
-    const cur = list.find((a) => a.focused);
-    const same = cur && cur.address === this.held?.address;
-    // Arriving, or any change but done turning idle, sets what it was.
-    if (!same || cur.status !== "idle") this.held = cur ? { address: cur.address, rank: RANK[cur.status] ?? 0 } : null;
-  }
-
   // agents-ids: the status a row shows (asks, waiting) from its labels; Herdr's own otherwise.
   eff(a) {
     return effStatus(a.status, this.labelsOf?.get(a.address));
@@ -221,8 +228,7 @@ export default class Agents extends View {
   rank(a) {
     const e = this.eff(a);
     if (e !== a.status) return RANK[e];
-    const sawDone = a.address === this.held?.address && this.held.rank === RANK.done && a.status === "idle";
-    return sawDone ? RANK.done : RANK[a.status] ?? 0;
+    return RANK[a.status] ?? 0;
   }
 
   sortMenu(t) {
@@ -419,7 +425,7 @@ export default class Agents extends View {
       .when(on, (el) => el.bg(t.raised))
       .hover((s) => s.bg(t.hover))
       .on_hover((on, cx) => { if (on) this.hovered = k.address; else if (this.hovered === k.address) this.hovered = null; cx.notify(); })
-      .on_click(() => this.peek(k.address))
+      .on_click(() => (this.listed.has(k.address) ? run("pane.focus", { terminal: k.address }) : this.peek(k.address)))
       .children(s.lines.map(l => div().self_start().mt(-4).w(9).h(17).mr(4).flex_none()
         .when(Boolean(l), el => el.border_l(1.5).border_color(t.input))
         .when(l === "└" || l === "├", el => el.border_b(1.5).rounded_bl(6))))
@@ -722,8 +728,15 @@ export default class Agents extends View {
     const now = Date.now();
     this.track(list, now);
     this.alertStalls(list, all, now);
-    this.hold(list);
+    // A kept sub-agent (one with a pane) is in agents() too: where a tree shows
+    // it, it gets no row of its own, unless it's pinned.
+    const nested = new Set(collapsed ? [] : list.flatMap((a) => this.tree(all, a.address).map((s) => s.t.address)));
+    list = list.filter((a) => a.pinned || !nested.has(a.address));
+    const tabCounts = new Map();
+    for (const a of list) tabCounts.set(a.tab, (tabCounts.get(a.tab) ?? 0) + 1);
     const byPriority = sort.id === "priority";
+    // A helper's done is its own row's news: it doesn't pull a working parent out of Working.
+    const kidRank = (k) => { const s = kidStatus(k, this.listed); return RANK[s === "done" ? "idle" : s] ?? 0; };
     // agents-ids: herds (members' agent.lead labels). In Priority, members nest under their lead, one level
     // deep; the other views keep them in their space or project with a "↳ lead" chip.
     const herd = herds(all);
@@ -731,9 +744,9 @@ export default class Agents extends View {
     const leadOf = new Map([...herd.byLead].flatMap(([l, ms]) => ms.map((m) => [m, l])));
     const crewOf = (addr) => (herd.byLead.get(addr) ?? []).map((m) => agentAt.get(m)).filter(Boolean);
     const candidates = new Set(byPriority && !collapsed ? list.filter((a) => !a.pinned && agentAt.has(leadOf.get(a.address))).map((a) => a.address) : []);
-    const nested = new Set([...candidates].filter((m) => !candidates.has(leadOf.get(m))));
-    const matesOf = (a) => crewOf(a.address).filter((m) => nested.has(m.address));
-    const urgency = new Map(list.map((a) => [a.address, Math.max(this.rank(a), ...this.tree(all, a.address).map((s) => RANK[kidStatus(s.t, this.listed)] ?? 0), ...matesOf(a).map((m) => this.rank(m)))]));
+    const inHerd = new Set([...candidates].filter((m) => !candidates.has(leadOf.get(m))));
+    const matesOf = (a) => crewOf(a.address).filter((m) => inHerd.has(m.address));
+    const urgency = new Map(list.map((a) => [a.address, Math.max(this.rank(a), ...this.tree(all, a.address).map((s) => kidRank(s.t)), ...matesOf(a).map((m) => this.rank(m)))]));
     const rankOf = (a) => urgency.get(a.address);
     // agents-ids: "Grouped by project" asks git once per folder; the stable sort keeps space order inside a project.
     const byProject = sort.id === "project";
@@ -763,7 +776,7 @@ export default class Agents extends View {
     if (byPriority) list = [...list].sort((x, y) => place(y) - place(x) || this.since(y) - this.since(x) || y.seq - x.seq);
     const kidsOf = (a) => matesOf(a).sort((x, y) => place(y) - place(x) || y.seq - x.seq);
     const pinned = list.filter((a) => a.pinned);
-    const rest = list.filter((a) => !a.pinned && !nested.has(a.address));
+    const rest = list.filter((a) => !a.pinned && !inHerd.has(a.address));
     list = [...pinned, ...rest];
     setAgentOrder(list.flatMap((a) => [a, ...kidsOf(a)]).map((a) => a.address));
 
@@ -804,12 +817,16 @@ export default class Agents extends View {
     // A row reads "space \u00b7 detail": the detail is a tab someone named or the
     // agent's own title, never an automatic tab number unless two rows would
     // otherwise read the same.
-    const tabs = spaces().flatMap(s => s.tabs);
-    const label = (a) => {
-      const tab = tabs.find(tab => tab.id === a.tab);
-      return tab ? title(tab, lead(tab)) : a.title || a.program?.name || "";
-    };
+    // Read the pane snapshot once: every host read copies the whole list into JS.
+    const leads = leadPanes(panes());
+    const tabs = new Map(spaces().flatMap(s => s.tabs).map(tab => [tab.id, tab]));
     const everyone = [...agentAt.values()]; // agents-ids: nested herd members need their tab names too
+    const labels = new Map(everyone.map(a => {
+      const tab = tabs.get(a.tab);
+      const many = tabCounts.get(a.tab) > 1;
+      return [a.address, tab ? title(many ? { ...tab, named: false } : tab, many ? a : leads.get(a.tab)) : (a.title || a.program?.name || "")];
+    }));
+    const label = (a) => labels.get(a.address);
     const detail = new Map(everyone.map(a => [a.address, /^\d+$/.test(label(a)) ? null : label(a)]));
     const seen = {};
     for (const a of everyone) { const k = `${a.space_name}\u0000${detail.get(a.address) ?? ""}`; seen[k] = (seen[k] ?? 0) + 1; }
@@ -838,13 +855,16 @@ export default class Agents extends View {
         return h_flex()
           .id(`ag-${a.address}`)
           .h(26)
-          .px(8)
+          .mx(6)
+          .px(2)
+          .rounded(6)
           .flex_none()
           .items_center()
           .gap(4)
+          .when(a.focused, (el) => el.bg(t.selected))
           .hover((s) => s.bg(t.hover))
           .on_click(() => run("pane.focus", { pane: a.pane }))
-          .child(div().flex_1().min_w(0).whitespace_nowrap().text_right().text_color(t.muted).child(String(i + 1)))
+          .child(div().flex_1().min_w(0).whitespace_nowrap().text_right().text_color(a.focused ? t.foreground : t.muted).child(String(i + 1)))
           .child(h_flex().w(14).flex_none().items_center().justify_center().child(this.status(t, { status: st }, true)));
       }
       const when = this.since(a);
