@@ -1,11 +1,7 @@
 import { View, div } from 'gpui-kit';
 import { v_flex, h_flex } from 'gpui-base';
 import { closeOverlay, exec, focused, props, run, theme } from 'herdr';
-import { isMarkdown, mdPaths, splitAddress } from './logic.mjs';
-
-// Prints the machine's home, then the paths that are files there, made absolute: relative ones against
-// the terminal's folder, ~/ against home. Paths travel as arguments, never as script.
-const RESOLVE = 'printf "%s\\n" "$HOME"; cd -- "$1" 2>/dev/null || cd; shift; for f; do case $f in "~/"*) f=$HOME/${f#"~/"};; /*) ;; *) f=$PWD/$f;; esac; [ -f "$f" ] && printf "%s\\n" "$f"; done; :';
+import { RESOLVE, isMarkdown, mdPaths, splitAddress } from './logic.mjs';
 
 export default class MdOpen extends View {
   init(_props, cx) {

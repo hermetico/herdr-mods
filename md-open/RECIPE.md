@@ -20,5 +20,13 @@ computer, so for another machine's terminal list them but say they can't be open
 have no history, so only what is on screen is found. A path a program wrapped across two lines is not
 found.
 
-Mod files: `mods/md-open/main.js`, `mod.json`, `logic.mjs`, `test_logic.mjs`.
+**Ctrl/Cmd-click** a markdown path in any terminal, on any machine, to open it the same way without
+the picker. `link.js` exports `handleLink`, and `mod.json` declares the rule
+`{"kind": "file", "pattern": "(?i)\\.(md|markdown)$"}`; a layout lists the mod in `link_handlers`.
+The path is Herdr's resolved one, else the clicked text with a `file:` URI decoded and a `:12` or
+`:12:5` suffix dropped. The same `sh -c` script makes it absolute on the terminal's machine; a path
+that isn't a file there passes to the next handler. It splits beside the clicked pane, or opens a
+tab in the clicked space.
+
+Mod files: `mods/md-open/main.js`, `link.js`, `mod.json`, `logic.mjs`, `test_logic.mjs`.
 Verify with `node md-open/mods/md-open/test_logic.mjs` and `herdr-app check md-open/mods/md-open`.

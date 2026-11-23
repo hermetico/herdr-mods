@@ -203,4 +203,17 @@ assert.deepEqual(moveMachine(["", "alpha"], "alpha", "alpha"), ["", "alpha"]);
   assert.deepEqual([denied.kind, denied.text, denied.action], ["login", "login refused", "login"]);
 }
 
+{
+  const { localLink, sshHost } = extras;
+  assert.deepEqual(localLink("http://localhost:5173/"), { port: 5173, url: "http://localhost:5173/" });
+  assert.deepEqual(localLink("http://127.0.0.1:8000/docs?x=1", "100.64.0.9"), { port: 8000, url: "http://100.64.0.9:8000/docs?x=1" });
+  assert.deepEqual(localLink("HTTP://0.0.0.0:3000", "acme-box"), { port: 3000, url: "http://acme-box:3000" });
+  assert.deepEqual(localLink("http://[::1]:9000/", "fd7a::1"), { port: 9000, url: "http://[fd7a::1]:9000/" });
+  assert.equal(localLink("http://localhost/"), null);
+  assert.equal(localLink("http://localhost:99999/"), null);
+  assert.equal(localLink("http://localhost:80@evil.example/"), null);
+  assert.equal(localLink("https://example.com:443/"), null);
+  assert.equal(sshHost("user alex\nhostname 100.64.0.9\nport 22"), "100.64.0.9");
+  assert.equal(sshHost(""), null);
+}
 console.log("ok");

@@ -230,5 +230,9 @@
   "traffic_lights": [
     12,
     16
+  ],
+  "link_handlers": [
+    "md-open",
+    "spaces-plus"
   ]
 }

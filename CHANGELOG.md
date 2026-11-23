@@ -10,6 +10,9 @@ a version (see [AGENTS.md](AGENTS.md#releases)).
 
 ### Added
 
+- **md-open:** Ctrl/Cmd-click a markdown path in any terminal, on any machine, to open it in `fresh` in a split beside it.
+- **spaces-plus:** Ctrl/Cmd-click a `localhost:<port>` link printed on another machine to open it: on the machine's address when the port answers there, else through an SSH tunnel in a `tunnel <machine>:<port>` space.
+- **main-plus:** lists md-open and spaces-plus as link handlers.
 - **spaces-plus:** a machine that isn't connected shows what's going on under its header, reconnecting, unreachable or needing a login, with Retry, Log in, or Open terminal for a login that wants typing.
 - **spaces-plus:** a machine behind Tailscale SSH that wants a fresh login says **Tailscale needs login**, with Open link, and a login that fails while 1Password is quit says **1Password not running**, with Open.
 

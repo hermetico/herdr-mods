@@ -28,7 +28,8 @@ integrations that make coding agents report their session IDs to it:
 
 Each mod is one folder in the shape herdr.dev indexes (repo topic `herdr-mod`): `<name>/RECIPE.md`
 (the brief to rebuild it from scratch), `<name>/preview.png`, and the mod itself in
-`<name>/mods/<name>/` (`main.js`, `mod.json`, its helper module, `test_logic.mjs`). Keep that shape:
+`<name>/mods/<name>/` (`main.js`, `mod.json`, its helper module, `test_logic.mjs`, and `link.js` when it
+handles Ctrl/Cmd-clicks on terminal links). Keep that shape:
 herdr.dev skips a folder without `RECIPE.md` and `preview.png` beside `mods/`, and no mod folder may
 hold a `layouts/` folder. A new mod gets a new top-level folder the same way. The layout is not listed
 on herdr.dev (a layout package would need its own copies of the mods); it lives in `layout/`, which

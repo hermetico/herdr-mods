@@ -33,6 +33,17 @@ reorder), with:
   WSL machine under the Windows app keeps `localhost` (WSL forwards it; its Herdr name resolves
   nowhere), told by `microsoft`/`WSL` in its `/proc/sys/kernel/osrelease`, read once per machine (no
   such file, as on macOS, means not WSL; only a failed read is tried again).
+- **Remote localhost links:** Ctrl/Cmd-click `http://localhost:5173`, `127.0.0.1`, `0.0.0.0` or
+  `[::1]` with a port, printed in another machine's terminal. `link.js` exports `handleLink`, and
+  `mod.json` declares the URL rule; a layout lists the mod in `link_handlers`. It reads where ssh
+  goes for that machine with `ssh -G`, which doesn't connect, and if the port answers there within
+  2 s, `nc -z -G 2`, opens the link on that address. Otherwise, mostly a server listening on
+  localhost only, it starts `ssh -N -L <port>:localhost:<port> <target>` in a space on this
+  computer named `tunnel <machine>:<port>`, waits up to 20 s for the port, which leaves room for a
+  Touch ID prompt, and opens `http://localhost:<port>`. A second click goes through the same tunnel.
+  Closing that space ends it. A port already taken on this computer gets a warning toast instead of
+  a guess. A local terminal's link passes to Herdr's usual opener. The machine's name and target
+  must match `SAFE_MACHINE`, and everything goes as argv.
 - **Pull request**, `#42` before the ports: the newest PR from the space's branch, green when open, `dim`
   when draft, `ansi5` when merged; closed-unmerged ones are left out. Red when a check failed, amber
   when CI has been queued for over 45 minutes; resting on the badge opens a 320px card (`HoverCard`): number and title, branch, state and review pills

@@ -99,6 +99,19 @@ export const isWsl = (osrelease) => /microsoft|wsl/i.test(osrelease ?? "");
 
 /** A listener's address as a URL. `localhost` on another machine becomes that machine's name, unless
  *  `local`: its localhost is this computer's too (WSL forwards its localhost to Windows). */
+/** A localhost link a terminal printed: its port, with the address it names swapped for `host`
+ *  ("" keeps localhost), or null when it isn't one with a port. */
+export function localLink(url, host = "") {
+  const m = /^(https?):\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\])(?::(\d{1,5}))(.*)$/i.exec(String(url ?? ""));
+  const port = m && Number(m[2]);
+  if (!port || port > 65535 || (m[3] && !/^[/?#]/.test(m[3]))) return null;
+  const at = host ? (host.includes(":") ? `[${host}]` : host) : "localhost";
+  return { port, url: `${m[1].toLowerCase()}://${at}:${port}${m[3]}` };
+}
+
+/** `ssh -G` output's hostname, or null. */
+export const sshHost = (config) => /^hostname (\S+)$/m.exec(String(config ?? ""))?.[1] ?? null;
+
 export const portUrl = (p, machine, local = false) => `http://${p.host === "localhost" && machine && !local ? machine : p.host}:${p.port}`;
 
 /** `gh pr list --json number,headRefName,state,isDraft,url,title,reviewDecision,statusCheckRollup` output as branch -> the newest PR from it
